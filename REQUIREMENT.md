@@ -99,6 +99,147 @@
 - Real-time performance monitoring
 - Alert on anomalies
 
+### 4.2 Data Source Support
+
+Agent 需要支持多种数据源，以便能够从不同系统中获取数据进行分析、特征工程和规则生成。支持的数据源类型包括关系型数据库、OLAP数据库、大数据平台、本地文件、API服务以及云数据平台。
+
+#### 4.2.1 Relational Databases (关系型数据库)
+
+**Supported Databases:**
+- **PostgreSQL**: 支持 PostgreSQL 9.6+ 版本
+- **MySQL**: 支持 MySQL 5.7+ 和 MySQL 8.0+ 版本
+- **MariaDB**: 支持 MariaDB 10.3+ 版本（兼容 MySQL 协议）
+
+**Capabilities:**
+- Schema introspection: 自动发现表结构、字段类型、索引信息
+- SQL query generation: 根据自然语言描述生成 SQL 查询
+- Query execution: 执行 SELECT 查询，支持聚合、JOIN、子查询等复杂操作
+- Connection pooling: 支持连接池管理，提高查询性能
+- Transaction support: 支持事务操作（仅用于测试环境，生产环境只读）
+
+**Use Cases:**
+- 查询历史决策结果和交易数据
+- 分析用户行为特征和模式
+- 提取特征数据进行规则回测
+- 关联查询多表数据进行分析
+
+#### 4.2.2 OLAP Databases (OLAP数据库)
+
+**Supported Databases:**
+- **ClickHouse**: 支持 ClickHouse 20.3+ 版本
+
+**Capabilities:**
+- High-performance analytics: 支持大规模数据聚合分析
+- Columnar query optimization: 针对列式存储优化查询
+- Time-series analysis: 支持时间序列数据分析和窗口函数
+- Distributed query support: 支持分布式集群查询
+- Materialized view support: 支持物化视图查询
+
+**Use Cases:**
+- 分析大规模历史决策数据（百万级到亿级）
+- 时间序列特征分析（如用户行为趋势）
+- 实时指标计算和监控
+- 多维度数据聚合和钻取分析
+ 
+
+#### 4.2.3 Big Data Platforms (大数据平台)
+
+**Supported Platforms:**
+- **Apache Spark**: 支持 Spark 3.0+ 版本
+  - PySpark integration: 支持 Python API 调用
+  - Spark SQL: 支持 SQL 查询接口
+  - DataFrame operations: 支持 DataFrame 操作和转换
+
+**Capabilities:**
+- Distributed data processing: 支持大规模分布式数据处理
+- Spark SQL generation: 根据需求生成 Spark SQL 查询
+- DataFrame operations: 支持复杂的数据转换和特征工程
+- Cluster resource management: 支持 Spark cluster 资源管理
+- Data source integration: 支持从 HDFS、S3、Hive 等读取数据
+
+**Use Cases:**
+- 处理超大规模数据集（TB 级别）
+- 复杂特征工程和数据预处理
+- 分布式特征计算和聚合
+- 大规模规则回测和性能评估 
+
+#### 4.2.4 Local Files (本地文件)
+
+**Supported File Formats:**
+- **Excel**: 支持 .xlsx, .xls 格式
+  - Multiple sheet support: 支持多工作表读取
+  - Data type inference: 自动推断数据类型
+  - Header detection: 自动识别表头
+- **CSV**: 支持 .csv 格式
+  - Encoding detection: 自动检测文件编码（UTF-8, GBK, etc.）
+  - Delimiter detection: 自动检测分隔符（逗号、制表符等）
+  - Quote handling: 正确处理引号和转义字符
+- **TXT**: 支持 .txt 格式
+  - Line-by-line processing: 支持逐行处理
+  - Custom delimiter support: 支持自定义分隔符
+
+**Capabilities:**
+- File upload: 支持通过 Web UI 或 CLI 上传文件
+- Schema inference: 自动推断文件结构和数据类型
+- Data preview: 支持数据预览（前 N 行）
+- Chunked reading: 支持大文件分块读取
+- Data validation: 数据格式验证和错误提示
+
+**Use Cases:**
+- 导入外部数据进行分析
+- 上传测试数据进行规则验证
+- 导入特征数据进行特征工程
+- 导出分析结果到本地文件
+ 
+
+#### 4.2.5 Service & API Integration (服务与API集成)
+
+**Supported Protocols:**
+- **REST API**: 支持 HTTP/HTTPS RESTful API 调用
+- **GraphQL**: 支持 GraphQL 查询接口
+- **gRPC**: 支持 gRPC 服务调用（可选）
+
+**Capabilities:**
+- API discovery: 支持 OpenAPI/Swagger 规范自动发现 API
+- Request generation: 根据自然语言描述生成 API 请求
+- Authentication: 支持多种认证方式（API Key, OAuth 2.0, Bearer Token）
+- Response parsing: 自动解析 JSON/XML 响应
+- Error handling: 优雅处理 API 错误和重试机制
+- Rate limiting: 支持 API 速率限制和退避策略
+
+**Use Cases:**
+- 调用外部风控服务获取风险评分
+- 查询第三方数据源（如征信数据、黑名单）
+- 集成业务系统获取用户信息
+- 调用特征服务获取实时特征值
+
+#### 4.2.6 Cloud Data Platforms (云数据平台)
+
+**Supported Platforms:**
+- **Snowflake**: 支持 Snowflake 数据仓库
+  - SQL query execution: 支持标准 SQL 查询
+  - Warehouse management: 支持虚拟仓库管理
+  - Schema discovery: 自动发现数据库和表结构
+  - Data sharing: 支持数据共享功能
+- **Databricks**: 支持 Databricks 平台
+  - Databricks SQL: 支持 SQL 查询接口
+  - Spark integration: 支持 Spark 作业执行
+  - Delta Lake support: 支持 Delta Lake 表查询
+  - Notebook execution: 支持 Databricks Notebook 执行（可选）
+
+**Capabilities:**
+- Cloud-native integration: 原生支持云数据平台特性
+- Scalable query execution: 利用云平台弹性扩展能力
+- Cost optimization: 查询成本优化建议
+- Data governance: 支持数据治理和权限管理
+- Multi-cloud support: 支持跨云平台数据访问
+
+**Use Cases:**
+- 查询云数据仓库中的历史数据
+- 利用云平台计算资源进行大规模分析
+- 跨平台数据整合和分析
+- 利用云平台 ML 能力进行特征工程
+ 
 ---
 
 ## 5. Interface Requirements
