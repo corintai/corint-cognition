@@ -297,7 +297,7 @@ Agent 能够根据数据规范自动识别问题数据并进行清洗，确保�
 ### 9.4 Cost Control
 - **Token Budget**: 单次对话 token 上限（默认 100K，可配置）
 - **Query Limit**: 单次任务数据库查询次数上限（默认 50 次）
-- **Timeout**: 单个工具调用超时（默认 60s），整体任务超时（默认 10min）
+- **Timeout**: 单个工具调用超时（默认 180s），整体任务超时（默认 60min）
 
 ---
 
@@ -305,9 +305,7 @@ Agent 能够根据数据规范自动识别问题数据并进行清洗，确保�
 
 | Metric | Definition | Target (6 months) |
 |--------|------------|-------------------|
-| Daily Active Users | 每日使用 Agent 的独立用户数 | 50+ |
 | Task Success Rate | 任务完成且用户满意的比例 | ≥ 75% |
-| Time Saved | 对比人工操作节省的时间 | ≥ 50% |
-| Rule Quality Score | 生成规则的精准率/召回率 | 与人工持平 |
-| NPS | 用户净推荐值 | ≥ 30 |
+| Time Saved | 对比人工操作节省的时间 | ≥ 90% |
+| Rule Quality Score | 生成规则的精准率/召回率 | 与人工持平 | 
 
