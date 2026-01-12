@@ -3,6 +3,7 @@ export interface LLMMessage {
   content: string;
   name?: string;
   tool_call_id?: string;
+  tool_calls?: LLMToolCall[];
 }
 
 export interface LLMToolCall {

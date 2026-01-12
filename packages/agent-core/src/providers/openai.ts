@@ -28,6 +28,20 @@ export class OpenAIProvider implements LLMProvider {
           tool_call_id: msg.tool_call_id!,
         };
       }
+      if (msg.role === 'assistant' && msg.tool_calls) {
+        return {
+          role: 'assistant',
+          content: msg.content,
+          tool_calls: msg.tool_calls.map(tc => ({
+            id: tc.id,
+            type: 'function',
+            function: {
+              name: tc.function.name,
+              arguments: tc.function.arguments,
+            },
+          })),
+        };
+      }
       return {
         role: msg.role as 'system' | 'user' | 'assistant',
         content: msg.content,

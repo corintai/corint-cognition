@@ -6,6 +6,7 @@ import { Planner } from './planner.js';
 import { Executor } from './executor.js';
 import { Evaluator } from './evaluator.js';
 import type { AgentConfig, AgentResponse, SessionContext } from './agent-types.js';
+import type { ExecutionResult } from './executor.js';
 
 export class Orchestrator {
   private llmClient: LLMClient;
@@ -78,22 +79,38 @@ export class Orchestrator {
       throw new Error(`Session ${sessionId} not found`);
     }
 
+    const costCheck = this.costController.checkLimits(sessionId);
+    if (!costCheck.allowed) {
+      yield {
+        type: 'response',
+        content: `Request blocked: ${costCheck.reason}`,
+      };
+      return;
+    }
+
     yield { type: 'status', content: 'Processing message...' };
 
     this.contextManager.addMessage(sessionId, 'user', userMessage);
 
-    yield { type: 'status', content: 'Analyzing intent...' };
+    try {
+      yield { type: 'status', content: 'Analyzing intent...' };
 
-    const intent = await this.classifyIntent(userMessage, context);
+      const intent = await this.classifyIntent(userMessage, context);
 
-    if (intent === 'simple_query') {
-      yield { type: 'status', content: 'Executing query...' };
-      const response = await this.handleSimpleQuery(sessionId, userMessage, context);
-      yield { type: 'response', content: response.content };
-    } else {
-      yield { type: 'status', content: 'Creating plan...' };
-      const response = await this.handleComplexTask(sessionId, userMessage, context);
-      yield { type: 'response', content: response.content };
+      if (intent === 'simple_query') {
+        yield { type: 'status', content: 'Executing query...' };
+        const response = await this.handleSimpleQuery(sessionId, userMessage, context);
+        yield { type: 'response', content: response.content };
+      } else {
+        yield { type: 'status', content: 'Creating plan...' };
+        const response = await this.handleComplexTask(sessionId, userMessage, context);
+        yield { type: 'response', content: response.content };
+      }
+    } catch (error) {
+      yield {
+        type: 'response',
+        content: `Error: ${(error as Error).message}`,
+      };
     }
   }
 
@@ -134,11 +151,23 @@ Reply with just: simple_query or complex_task`;
   ): Promise<AgentResponse> {
     const result = await this.executor.executeWithTools(message, context);
 
-    this.recordTokenUsage(sessionId, { total_tokens: result.tokensUsed || 0 });
+    this.recordTokenUsage(sessionId, result.usage);
+    if (!result.usage && result.tokensUsed) {
+      this.recordTokenUsage(sessionId, { total_tokens: result.tokensUsed });
+    }
 
     const response: AgentResponse = {
       content: typeof result.output === 'string' ? result.output : JSON.stringify(result.output),
       confidence: 'high',
+      usage:
+        result.usage ||
+        (result.tokensUsed
+          ? {
+              prompt_tokens: 0,
+              completion_tokens: result.tokensUsed,
+              total_tokens: result.tokensUsed,
+            }
+          : undefined),
     };
 
     this.contextManager.addMessage(sessionId, 'assistant', response.content);
@@ -152,11 +181,14 @@ Reply with just: simple_query or complex_task`;
     context: SessionContext,
   ): Promise<AgentResponse> {
     const planningResult = await this.planner.createPlan(message, context);
+    this.recordTokenUsage(sessionId, planningResult.usage);
     context.currentPlan = planningResult.plan;
 
-    const executionResults = await this.executor.executePlan(planningResult.plan, context);
+    let executionResults = await this.executor.executePlan(planningResult.plan, context);
+    this.recordExecutionUsage(sessionId, executionResults);
 
     const errorAnalysis = await this.evaluator.detectErrors(executionResults);
+    this.recordTokenUsage(sessionId, errorAnalysis.usage);
 
     if (errorAnalysis.hasErrors) {
       const revisedPlanResult = await this.planner.revisePlan(
@@ -164,16 +196,22 @@ Reply with just: simple_query or complex_task`;
         errorAnalysis.recoverySuggestion || 'Retry failed tasks',
         'overwrite',
       );
+      this.recordTokenUsage(sessionId, revisedPlanResult.usage);
       context.currentPlan = revisedPlanResult.plan;
+      const recoveryResults = await this.executor.executePlan(revisedPlanResult.plan, context);
+      this.recordExecutionUsage(sessionId, recoveryResults);
+      executionResults = [...executionResults, ...recoveryResults];
     }
 
     const evaluation = await this.evaluator.evaluateResult(message, executionResults);
+    this.recordTokenUsage(sessionId, evaluation.usage);
 
     const response = await this.evaluator.synthesizeResponse(
       message,
       executionResults,
       evaluation,
     );
+    this.recordTokenUsage(sessionId, response.usage);
 
     this.contextManager.addMessage(sessionId, 'assistant', response.content);
 
@@ -185,11 +223,22 @@ Reply with just: simple_query or complex_task`;
     usage?: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number },
   ): void {
     if (usage) {
-      this.costController.recordQuery(
-        sessionId,
-        usage.prompt_tokens || 0,
-        usage.completion_tokens || 0,
-      );
+      const promptTokens = usage.prompt_tokens || 0;
+      const completionTokens = usage.completion_tokens || 0;
+      const totalTokens = usage.total_tokens || 0;
+      const derivedCompletion =
+        completionTokens || (totalTokens > 0 ? Math.max(totalTokens - promptTokens, 0) : 0);
+      this.costController.recordQuery(sessionId, promptTokens, derivedCompletion);
+    }
+  }
+
+  private recordExecutionUsage(sessionId: string, results: ExecutionResult[]): void {
+    for (const result of results) {
+      if (result.usage) {
+        this.recordTokenUsage(sessionId, result.usage);
+      } else if (result.tokensUsed) {
+        this.recordTokenUsage(sessionId, { total_tokens: result.tokensUsed });
+      }
     }
   }
 }

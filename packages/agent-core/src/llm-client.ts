@@ -17,7 +17,7 @@ export class LLMClient {
 
   async complete(messages: LLMMessage[], config?: Partial<LLMConfig>): Promise<LLMResponse> {
     const mergedConfig: LLMConfig = {
-      model: this.defaultConfig.model || 'gpt-4-turbo',
+      model: config?.model ?? this.defaultConfig.model ?? 'gpt-4-turbo',
       temperature: config?.temperature ?? this.defaultConfig.temperature ?? 0.7,
       max_tokens: config?.max_tokens ?? this.defaultConfig.max_tokens ?? 4096,
       top_p: config?.top_p ?? this.defaultConfig.top_p ?? 1.0,
@@ -33,7 +33,7 @@ export class LLMClient {
     config?: Partial<LLMConfig>,
   ): AsyncGenerator<LLMStreamChunk, void, unknown> {
     const mergedConfig: LLMConfig = {
-      model: this.defaultConfig.model || 'gpt-4-turbo',
+      model: config?.model ?? this.defaultConfig.model ?? 'gpt-4-turbo',
       temperature: config?.temperature ?? this.defaultConfig.temperature ?? 0.7,
       max_tokens: config?.max_tokens ?? this.defaultConfig.max_tokens ?? 4096,
       top_p: config?.top_p ?? this.defaultConfig.top_p ?? 1.0,

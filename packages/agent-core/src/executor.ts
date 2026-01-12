@@ -1,12 +1,16 @@
 import type { LLMClient } from './llm-client.js';
 import type { ToolRegistry } from './tool.js';
 import type { Task, Plan, SessionContext } from './agent-types.js';
+import type { LLMResponse, LLMToolCall } from './types.js';
 
 export interface ExecutionResult {
   success: boolean;
   output?: unknown;
   error?: string;
   tokensUsed?: number;
+  usage?: LLMResponse['usage'];
+  toolCalls?: LLMToolCall[];
+  toolResults?: Array<{ toolCallId: string; result: unknown; error?: string }>;
 }
 
 export class Executor {
@@ -39,21 +43,31 @@ export class Executor {
 
   async executePlan(plan: Plan, context: SessionContext): Promise<ExecutionResult[]> {
     const results: ExecutionResult[] = [];
+    let madeProgress = true;
 
-    for (let i = plan.currentTaskIndex; i < plan.tasks.length; i++) {
-      const task = plan.tasks[i];
-      plan.currentTaskIndex = i;
+    while (madeProgress) {
+      madeProgress = false;
 
-      if (!this.canExecuteTask(task, plan.tasks)) {
-        task.status = 'blocked';
-        continue;
-      }
+      for (let i = 0; i < plan.tasks.length; i++) {
+        const task = plan.tasks[i];
 
-      const result = await this.executeTask(task, context);
-      results.push(result);
+        if (task.status === 'completed' || task.status === 'failed') {
+          continue;
+        }
 
-      if (!result.success) {
-        break;
+        if (!this.canExecuteTask(task, plan.tasks)) {
+          task.status = 'blocked';
+          continue;
+        }
+
+        plan.currentTaskIndex = i;
+        const result = await this.executeTask(task, context);
+        results.push(result);
+        madeProgress = true;
+
+        if (!result.success) {
+          return results;
+        }
       }
     }
 
@@ -62,6 +76,7 @@ export class Executor {
 
   async executeWithTools(userMessage: string, context: SessionContext): Promise<ExecutionResult> {
     const tools = this.toolRegistry.getOpenAITools();
+    const toolConfig = tools.length > 0 ? { tools } : {};
 
     const messages = [
       { role: 'system' as const, content: this.getSystemPrompt() },
@@ -72,18 +87,37 @@ export class Executor {
       { role: 'user' as const, content: userMessage },
     ];
 
-    const response = await this.llmClient.complete(messages, { tools });
+    const response = await this.llmClient.complete(messages, toolConfig);
+    const responseUsage = response.usage;
 
     if (response.tool_calls && response.tool_calls.length > 0) {
       const toolResults = await this.executeToolCalls(response.tool_calls, context);
+      const toolMessages = toolResults.map(result => ({
+        role: 'tool' as const,
+        content: JSON.stringify(result.error ? { error: result.error } : result.result),
+        tool_call_id: result.toolCallId,
+      }));
+
+      const followUpMessages = [
+        ...messages,
+        {
+          role: 'assistant' as const,
+          content: response.content ?? '',
+          tool_calls: response.tool_calls,
+        },
+        ...toolMessages,
+      ];
+
+      const followUpResponse = await this.llmClient.complete(followUpMessages, toolConfig);
+      const mergedUsage = this.mergeUsage(responseUsage, followUpResponse.usage);
+
       return {
         success: true,
-        output: {
-          content: response.content,
-          toolCalls: response.tool_calls,
-          toolResults,
-        },
-        tokensUsed: response.usage?.total_tokens,
+        output: followUpResponse.content ?? '',
+        tokensUsed: mergedUsage?.total_tokens ?? followUpResponse.usage?.total_tokens,
+        usage: mergedUsage ?? followUpResponse.usage,
+        toolCalls: response.tool_calls,
+        toolResults,
       };
     }
 
@@ -91,6 +125,7 @@ export class Executor {
       success: true,
       output: response.content,
       tokensUsed: response.usage?.total_tokens,
+      usage: response.usage,
     };
   }
 
@@ -120,7 +155,7 @@ export class Executor {
 Task: ${task.description}
 
 Context:
-${JSON.stringify(context.workingMemory, null, 2)}
+${JSON.stringify(this.formatWorkingMemory(context.workingMemory), null, 2)}
 
 Provide a detailed result.`;
 
@@ -133,6 +168,7 @@ Provide a detailed result.`;
       success: true,
       output: response.content,
       tokensUsed: response.usage?.total_tokens,
+      usage: response.usage,
     };
   }
 
@@ -191,5 +227,23 @@ Always provide clear, actionable results.`;
 
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private formatWorkingMemory(memory: Map<string, unknown>): Record<string, unknown> {
+    return Object.fromEntries(memory.entries());
+  }
+
+  private mergeUsage(
+    first?: LLMResponse['usage'],
+    second?: LLMResponse['usage'],
+  ): LLMResponse['usage'] | undefined {
+    if (!first && !second) {
+      return undefined;
+    }
+    return {
+      prompt_tokens: (first?.prompt_tokens || 0) + (second?.prompt_tokens || 0),
+      completion_tokens: (first?.completion_tokens || 0) + (second?.completion_tokens || 0),
+      total_tokens: (first?.total_tokens || 0) + (second?.total_tokens || 0),
+    };
   }
 }

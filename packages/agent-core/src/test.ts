@@ -1,5 +1,12 @@
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { OpenAIProvider, AnthropicProvider, DeepSeekProvider } from '@corint/agent-core';
 import { LLMClient } from '@corint/agent-core';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '../../..', '.env') });
+dotenv.config();
 
 async function testOpenAI() {
   console.log('Testing OpenAI Provider...');

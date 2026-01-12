@@ -1,6 +1,7 @@
 import type { LLMClient } from './llm-client.js';
 import type { ExecutionResult } from './executor.js';
 import type { AgentResponse } from './agent-types.js';
+import type { LLMResponse } from './types.js';
 
 export interface EvaluationResult {
   confidence: 'high' | 'medium' | 'low';
@@ -9,6 +10,7 @@ export interface EvaluationResult {
   needsRevision: boolean;
   suggestions?: string[];
   requiresUserInput?: boolean;
+  usage?: LLMResponse['usage'];
 }
 
 export class Evaluator {
@@ -47,7 +49,9 @@ Please evaluate whether these results achieve the goal.`;
       { role: 'user', content: userPrompt },
     ]);
 
-    return this.parseEvaluationResponse(response.content || '');
+    const evaluation = this.parseEvaluationResponse(response.content || '');
+    evaluation.usage = response.usage;
+    return evaluation;
   }
 
   async synthesizeResponse(
@@ -80,6 +84,7 @@ Please create a user-friendly response.`;
       reasoning: evaluation.reasoning,
       suggestions: evaluation.suggestions,
       requiresUserInput: evaluation.requiresUserInput,
+      usage: response.usage,
     };
   }
 
@@ -87,6 +92,7 @@ Please create a user-friendly response.`;
     hasErrors: boolean;
     errorSummary?: string;
     recoverySuggestion?: string;
+    usage?: LLMResponse['usage'];
   }> {
     const errors = executionResults.filter(r => !r.success);
 
@@ -119,6 +125,7 @@ Please analyze and suggest recovery.`;
       hasErrors: true,
       errorSummary: result.errorSummary,
       recoverySuggestion: result.recoverySuggestion,
+      usage: response.usage,
     };
   }
 

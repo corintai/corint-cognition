@@ -1,9 +1,11 @@
 import type { LLMClient } from './llm-client.js';
 import type { Task, Plan, SessionContext } from './agent-types.js';
+import type { LLMResponse } from './types.js';
 
 export interface PlanningResult {
   plan: Plan;
   reasoning: string;
+  usage?: LLMResponse['usage'];
 }
 
 export class Planner {
@@ -56,6 +58,7 @@ Please create a detailed plan to achieve this goal.`;
     return {
       plan,
       reasoning: result.reasoning,
+      usage: response.usage,
     };
   }
 
@@ -103,6 +106,7 @@ Please revise the plan.`;
     return {
       plan: revisedPlan,
       reasoning: result.reasoning,
+      usage: response.usage,
     };
   }
 
