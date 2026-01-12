@@ -126,7 +126,7 @@ function zodToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
   }
   if (schema instanceof z.ZodUnion) {
     return {
-      anyOf: schema.options.map(option => zodToJsonSchema(option)),
+      anyOf: schema.options.map((option: z.ZodTypeAny) => zodToJsonSchema(option)),
     };
   }
   if (schema instanceof z.ZodLiteral) {
@@ -139,7 +139,7 @@ function zodToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
     };
   }
   if (schema instanceof z.ZodTuple) {
-    const items = schema.items.map(item => zodToJsonSchema(item));
+    const items = schema.items.map((item: z.ZodTypeAny) => zodToJsonSchema(item));
     return {
       type: 'array',
       items,

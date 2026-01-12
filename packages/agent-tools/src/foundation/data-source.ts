@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import mysql from 'mysql2/promise';
+import * as mysql from 'mysql2/promise';
 import { createClient } from '@clickhouse/client';
 import type { ClickHouseClient } from '@clickhouse/client';
 

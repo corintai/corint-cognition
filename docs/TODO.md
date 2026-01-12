@@ -131,16 +131,16 @@
 ## Phase 6: CLI Interface (P0)
 
 ### 6.1 Core CLI
-- [ ] Interactive REPL mode
-- [ ] Command parsing and routing
-- [ ] Streaming output display
-- [ ] Tool call visualization
+- [x] Interactive REPL mode
+- [x] Command parsing and routing
+- [x] Streaming output display
+- [x] Tool call visualization
 
 ### 6.2 User Experience
-- [ ] Progress indicators
-- [ ] Confirmation dialogs (for destructive operations)
-- [ ] History and session management
-- [ ] `/restore` command for checkpoint rollback
+- [x] Progress indicators
+- [x] Confirmation dialogs (for destructive operations)
+- [x] History and session management
+- [x] `/restore` command for checkpoint rollback
 
 ---
 

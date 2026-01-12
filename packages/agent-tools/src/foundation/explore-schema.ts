@@ -1,6 +1,6 @@
 import { Tool, ToolExecutionContext } from '@corint/agent-core';
 import { z } from 'zod';
-import { getDataSourceClient } from './data-source.js';
+import { getDataSourceClient, type DataSourceClient } from './data-source.js';
 
 const ExploreSchemaInput = z.object({
   data_source: z.string().describe('Data source identifier'),
@@ -33,7 +33,7 @@ export class ExploreSchemaTool extends Tool<ExploreSchemaInputType, ExploreSchem
     context: ToolExecutionContext,
   ): Promise<ExploreSchemaResult> {
     void context;
-    const client = await getDataSourceClient(input.data_source);
+    const client: DataSourceClient = await getDataSourceClient(input.data_source);
 
     switch (client.type) {
       case 'postgres':
@@ -43,7 +43,7 @@ export class ExploreSchemaTool extends Tool<ExploreSchemaInputType, ExploreSchem
       case 'clickhouse':
         return this.exploreClickHouse(client.client, input);
       default:
-        throw new Error(`Unsupported data source type: ${client.type}`);
+        throw new Error('Unsupported data source type');
     }
   }
 

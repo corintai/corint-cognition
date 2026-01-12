@@ -12,7 +12,8 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "test": "turbo run test",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "clean": "turbo run clean && rm -rf node_modules",
+    "cli": "npm run build -w @corint/agent-core && npm run build -w @corint/agent-tools && npm run build -w @corint/agent-cli && node packages/agent-cli/dist/cli.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

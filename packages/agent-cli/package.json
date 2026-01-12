@@ -14,12 +14,13 @@
   },
   "dependencies": {
     "@corint/agent-core": "*",
-    "@corint/agent-tools": "*",
     "@corint/agent-skills": "*",
-    "commander": "^11.1.0",
+    "@corint/agent-tools": "*",
     "chalk": "^5.3.0",
-    "ora": "^8.0.1",
-    "inquirer": "^9.2.12"
+    "commander": "^11.1.0",
+    "dotenv": "^17.2.3",
+    "inquirer": "^9.2.12",
+    "ora": "^8.0.1"
   },
   "devDependencies": {
     "@types/inquirer": "^9.0.7",

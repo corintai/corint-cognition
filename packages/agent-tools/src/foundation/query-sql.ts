@@ -1,6 +1,6 @@
 import { Tool, ToolExecutionContext } from '@corint/agent-core';
 import { z } from 'zod';
-import { getDataSourceClient } from './data-source.js';
+import { getDataSourceClient, type DataSourceClient } from './data-source.js';
 
 const QuerySQLInput = z.object({
   sql: z.string().describe('SQL query to execute'),
@@ -28,7 +28,7 @@ export class QuerySQLTool extends Tool<QuerySQLInputType, QuerySQLResult> {
 
   async execute(input: QuerySQLInputType, context: ToolExecutionContext): Promise<QuerySQLResult> {
     void context;
-    const client = await getDataSourceClient(input.data_source);
+    const client: DataSourceClient = await getDataSourceClient(input.data_source);
 
     switch (client.type) {
       case 'postgres':
@@ -38,7 +38,7 @@ export class QuerySQLTool extends Tool<QuerySQLInputType, QuerySQLResult> {
       case 'clickhouse':
         return this.queryClickHouse(client.client, input);
       default:
-        throw new Error(`Unsupported data source type: ${client.type}`);
+        throw new Error('Unsupported data source type');
     }
   }
 
@@ -46,11 +46,11 @@ export class QuerySQLTool extends Tool<QuerySQLInputType, QuerySQLResult> {
     pool: import('pg').Pool,
     input: QuerySQLInputType,
   ): Promise<QuerySQLResult> {
-    const result = await pool.query({
+    const query = pool.query({
       text: input.sql,
       values: input.params,
-      query_timeout: input.timeout_ms,
     });
+    const result = input.timeout_ms ? await withTimeout(query, input.timeout_ms) : await query;
 
     return this.buildResult(result.rows, result.rowCount ?? result.rows.length, input.max_rows);
   }
@@ -115,4 +115,17 @@ export class QuerySQLTool extends Tool<QuerySQLInputType, QuerySQLResult> {
       truncated: true,
     };
   }
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error(`Query timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    promise
+      .then(result => resolve(result))
+      .catch(reject)
+      .finally(() => clearTimeout(timeoutId));
+  });
 }
