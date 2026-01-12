@@ -1,8 +1,14 @@
 # CORINT Risk Agent Requirements
 
-## 0. Design References
+## 1. Design References
 
-### 0.1 Product References
+### 1.0 Product Vision
+
+> **用一个 AI Agent + 极少量核心人员，高效运营风控业务。**
+>
+> 用户只关心**规则、指标、策略和结果**，不关心代码。
+
+### 1.1 Product References
 - **Web UI**: 参考 [Manus](https://www.manus.app/) 的对话式交互体验
   - 自然语言驱动的工作流
   - 可视化结果展示
@@ -13,9 +19,9 @@
   - 工具调用透明化
   - 支持脚本化执行
 
-### 0.2 Agent Design Principles
+### 1.2 Agent Design Principles
 >参考Manus两位创始人的访谈
-- **Agent架构**：由三部分组成；大脑（LLM），环境（Sandbox+Rumtime），执行工具（Tools）
+- **Agent架构**：由三部分组成；大脑（LLM），环境（Sandbox+Runtime），执行工具（Tools）
 - **Model-driven**: 不预设人工规则或复杂的工作流（Workflow），而是主张由大模型本身决定完成任务的路径
 - **Planning Stage**: 有单独的规划阶段，将复杂任务拆解为多步计划（Plan），并根据环境反馈（Observation）不断调整。
 - **Coding & Tools Calling**：能自己写代码、调试、运行，调用API 以及工具，从而能胜任各种长尾任务
@@ -28,7 +34,7 @@
 
 ---
 
-## 1. Target Users
+## 2. Target Users
 
 ### Primary Users
 - **Risk Strategy Analysts**: 负责设计和优化风控策略的分析师
@@ -36,215 +42,159 @@
 - **Business Stakeholders**: 管理层和运营人员，关注业务指标
 
 ### User Personas
-- **Alice (Strategy Analyst)**: 每天需要分析通过率、拒绝率变化，找出异常规则，调优阈值
-- **Bob (Modeling Engineer)**: 需要快速验证新特征效果，回测策略表现，部署新规则
-- **Carol (Business Manager)**: 需要查看风控报表，理解策略影响，做业务决策
+
+**Alice (Strategy Analyst)**
+- 每天需要分析通过率、拒绝率变化，找出异常规则，调优阈值
+- User Stories:
+  - As Alice, I want to ask "为什么昨天拒绝率上升了 5%", so that I can quickly identify problematic rules
+  - As Alice, I want to say "调整规则 R001 的阈值，使误伤率降低 10%", so that I can optimize strategy without coding
+  - As Alice, I want to ask "对比本周和上周的规则触发分布", so that I can spot trends
+
+**Bob (Modeling Engineer)**
+- 需要快速验证新特征效果，回测策略表现，部署新规则
+- User Stories:
+  - As Bob, I want to say "用最近 30 天数据回测这条规则", so that I can validate rule effectiveness
+  - As Bob, I want to say "生成一个检测多头借贷的特征", so that I can quickly prototype new features
+  - As Bob, I want to say "将这个 ruleset 部署到 staging 环境", so that I can test in real environment
+
+**Carol (Business Manager)**
+- 需要查看风控报表，理解策略影响，做业务决策
+- User Stories:
+  - As Carol, I want to ask "本月风控策略对通过率的影响是多少", so that I can make informed decisions
+  - As Carol, I want to ask "生成一份本周风控表现报告", so that I can share with stakeholders
+  - As Carol, I want to ask "如果放宽阈值 10%，预计坏账率会增加多少", so that I can evaluate trade-offs
 
 ---
 
-## 2. Application Scenarios
+## 3. Application Scenarios
 
-### 2.1 Primary Scenarios (Phase 1)
-- **Credit Risk Management**: 信贷审批、额度管理、逾期预测
-- **Fraud Detection**: 交易反欺诈、账户盗用检测、虚假身份识别
+### 3.1 Primary Scenarios (Phase 1)
 
-### 2.2 Extended Scenarios (Future)
+**Credit Risk Management** (信贷审批、额度管理、逾期预测)
+- 新用户授信审批规则生成与优化
+- 存量用户额度调整策略
+- 逾期预警规则配置
+
+**Fraud Detection** (交易反欺诈、账户盗用检测、虚假身份识别)
+- 异常交易实时拦截规则
+- 设备指纹与行为特征分析
+- 团伙欺诈模式识别
+
+### 3.2 Extended Scenarios (Future)
 - **Payment Risk**: 支付欺诈、洗钱检测
 - **E-commerce Risk**: 恶意刷单、虚假评论、账号养号
 - **Insurance Risk**: 骗保检测、理赔审核
 
 ---
 
-## 3. Core Objectives
+## 4. Core Objectives
 
-### 3.1 User Experience Goal
-让用户能够像使用 **Manus** 一样，通过自然语言描述，完成日常风控工作：
-- "为什么昨天拒绝率上升了？"
-- "优化欺诈检测规则，降低误伤率"
-- "生成一条规则：用户 7 天内登录次数超过 10 次且来自 3 个不同设备，则拒绝"
+### 4.1 User Experience Goal
+让用户能够像使用 **Manus** 一样，通过自然语言对话完成日常风控工作，无需编写代码或学习复杂工具。具体场景见 [Section 2 User Personas](#user-personas)。
 
-### 3.2 Technical Goals
-- **DSL Generation**: 自动生成 CORINT RDL（Rules, Rulesets, Pipelines）
-- **Iterative Workflow**: 支持多轮对话、迭代优化
-- **Production-Ready**: 生成的代码可直接部署到生产环境进行A/B Test
+### 4.2 Technical Goals
+
+| Goal | Description | Success Criteria |
+|------|-------------|------------------|
+| **DSL Generation** | 自动生成 CORINT RDL（Rules, Rulesets, Pipelines） | 语法正确率 100%，语义正确率 ≥ 90% |
+| **Iterative Workflow** | 支持多轮对话、迭代优化 | 单次会话支持 ≥ 20 轮对话 |
+| **Production-Ready** | 生成的代码可直接部署到生产环境 | 无需人工修改即可通过 CI 校验 |
+| **Extensibility** | 支持新数据源和工具扩展 | 新增数据源 < 1 人天 |
+| **Observability** | 全链路可追踪 | 每个请求可追溯完整执行路径 |
 
 ---
 
-## 4. Functional Requirements
+## 5. Functional Requirements
 
-### 4.1 Core Capabilities
+### 5.1 Core Capabilities
 
-#### 4.1.1 Risk Analysis
-- Query historical decision results (通过率、拒绝率、审核率)
-- Analyze rule performance (触发率、精准率、误报率)
-- Detect anomalies in features/metrics (异常用户、异常交易)
-- Root cause investigation (为什么某条规则突然触发增多)
-- Pattern discovery (发现潜在欺诈模式)
+> Priority: **P0** = MVP必须, **P1** = 重要但可延后, **P2** = 未来增强
 
-#### 4.1.2 Strategy Generation
-- Generate rules in CORINT RDL syntax
-- Create rulesets and pipelines
-- Generate feature definitions
-- Optimize thresholds and weights
+#### 5.1.1 Risk Analysis
+| Feature | Priority | Description |
+|---------|----------|-------------|
+| Query historical decision results | P0 | 通过率、拒绝率、审核率查询 |
+| Analyze rule performance | P0 | 触发率、精准率、误报率分析 |
+| Root cause investigation | P0 | 为什么某条规则突然触发增多 |
+| Detect anomalies in features/metrics | P1 | 异常用户、异常交易检测 |
+| Pattern discovery | P2 | 发现潜在欺诈模式 |
 
-#### 4.1.3 Testing & Validation
-- Syntax validation (RDL 语法检查)
-- Semantic validation (规则逻辑校验)
-- Backtest on historical data (回测策略表现)
-- A/B test framework (策略对比实验)
+#### 5.1.2 Strategy Generation & Optimization
 
-#### 4.1.4 Deployment & Monitoring
-- Deploy rules/rulesets to repository
-- Version control integration
-- Real-time performance monitoring
-- Alert on anomalies
+> **模型不是终点，策略才是。**
 
-### 4.2 Data Source Support
+| Feature | Priority | Description |
+|---------|----------|-------------|
+| Generate rules in RDL syntax | P0 | 根据自然语言生成规则代码 |
+| Create rulesets and pipelines | P0 | 组合规则为完整策略 |
+| Strategy simulation | P0 | 模拟不同阈值下的通过率/逾期/收益 |
+| Strategy comparison | P0 | 多策略方案对比，推荐最优方案 |
+| Optimize thresholds and weights | P1 | 自动调优规则参数 |
+| Generate feature definitions | P1 | 生成特征定义代码 |
 
-Agent 需要支持多种数据源，以便能够从不同系统中获取数据进行分析、特征工程和规则生成。支持的数据源类型包括关系型数据库、OLAP数据库、大数据平台、本地文件、API服务以及云数据平台。
+#### 5.1.3 Testing & Validation
+| Feature | Priority | Description |
+|---------|----------|-------------|
+| Syntax validation | P0 | RDL 语法检查 |
+| Semantic validation | P0 | 规则逻辑校验 |
+| Backtest on historical data | P0 | 回测策略表现 |
+| A/B test framework | P1 | 策略对比实验 |
 
-#### 4.2.1 Relational Databases (关系型数据库)
+#### 5.1.4 Deployment & Monitoring
+| Feature | Priority | Description |
+|---------|----------|-------------|
+| Deploy rules/rulesets to repository | P0 | 部署到规则仓库 |
+| Version control integration | P0 | Git 版本管理 |
+| Real-time performance monitoring | P1 | 实时性能监控 |
+| Alert on anomalies | P2 | 异常告警 |
 
-**Supported Databases:**
-- **PostgreSQL**: 支持 PostgreSQL 9.6+ 版本
-- **MySQL**: 支持 MySQL 5.7+ 和 MySQL 8.0+ 版本
-- **MariaDB**: 支持 MariaDB 10.3+ 版本（兼容 MySQL 协议）
+#### 5.1.5 Reporting & BI
 
-**Capabilities:**
-- Schema introspection: 自动发现表结构、字段类型、索引信息
-- SQL query generation: 根据自然语言描述生成 SQL 查询
-- Query execution: 执行 SELECT 查询，支持聚合、JOIN、子查询等复杂操作
-- Connection pooling: 支持连接池管理，提高查询性能
-- Transaction support: 支持事务操作（仅用于测试环境，生产环境只读）
+| Feature | Priority | Description |
+|---------|----------|-------------|
+| Daily report generation | P0 | 自动生成日报（放款金额、通过率、DPD 分布等） |
+| Business metrics dashboard | P0 | 核心经营指标看板 |
+| Vintage analysis | P1 | 账龄分析、逾期趋势 |
+| Channel ROI analysis | P1 | 渠道效果对比 |
+| Strategy before/after comparison | P1 | 策略上线前后效果对比 |
 
-**Use Cases:**
-- 查询历史决策结果和交易数据
-- 分析用户行为特征和模式
-- 提取特征数据进行规则回测
-- 关联查询多表数据进行分析
+### 5.2 Data Source Support
 
-#### 4.2.2 OLAP Databases (OLAP数据库)
+Agent 需要支持多种数据源进行分析、特征工程和规则生成。
 
-**Supported Databases:**
-- **ClickHouse**: 支持 ClickHouse 20.3+ 版本
+| Category | Supported | Primary Use Cases |
+|----------|-----------|-------------------|
+| **Relational DB** | PostgreSQL, MySQL, MariaDB | 历史决策查询、用户行为分析、规则回测 |
+| **OLAP** | ClickHouse | 大规模聚合分析、时序特征、实时监控 |
+| **Big Data** | Apache Spark (PySpark, Spark SQL) | TB级数据处理、复杂特征工程、分布式回测 |
+| **Local Files** | Excel, CSV, TXT | 外部数据导入、测试数据验证 |
+| **API** | REST, GraphQL, gRPC (optional) | 外部风控服务、第三方数据源、实时特征 |
+| **Cloud Platform** | Snowflake, Databricks | 云数仓查询、跨平台分析 |
 
-**Capabilities:**
-- High-performance analytics: 支持大规模数据聚合分析
-- Columnar query optimization: 针对列式存储优化查询
-- Time-series analysis: 支持时间序列数据分析和窗口函数
-- Distributed query support: 支持分布式集群查询
-- Materialized view support: 支持物化视图查询
+**Common Capabilities:**
+- Schema introspection & auto-discovery
+- Query generation from natural language
+- Connection pooling & authentication
+- Read-only mode for production environments
 
-**Use Cases:**
-- 分析大规模历史决策数据（百万级到亿级）
-- 时间序列特征分析（如用户行为趋势）
-- 实时指标计算和监控
-- 多维度数据聚合和钻取分析
- 
+### 5.3 Data Quality Management
 
-#### 4.2.3 Big Data Platforms (大数据平台)
+Agent 能够根据数据规范自动识别问题数据并进行清洗，确保分析和策略基于干净可靠的数据。
 
-**Supported Platforms:**
-- **Apache Spark**: 支持 Spark 3.0+ 版本
-  - PySpark integration: 支持 Python API 调用
-  - Spark SQL: 支持 SQL 查询接口
-  - DataFrame operations: 支持 DataFrame 操作和转换
+| Feature | Priority | Description |
+|---------|----------|-------------|
+| Schema understanding | P0 | 理解数据表结构、字段类型、业务含义 |
+| Anomaly detection | P0 | 自动识别异常值、缺失值、格式错误、逻辑冲突 |
+| Data cleaning suggestion | P0 | 针对问题数据提出清洗建议（删除/填充/修正） |
+| Cleaning execution | P1 | 执行清洗操作，生成干净数据集 |
+| Quality report | P1 | 生成数据质量报告（问题分布、清洗统计） |
 
-**Capabilities:**
-- Distributed data processing: 支持大规模分布式数据处理
-- Spark SQL generation: 根据需求生成 Spark SQL 查询
-- DataFrame operations: 支持复杂的数据转换和特征工程
-- Cluster resource management: 支持 Spark cluster 资源管理
-- Data source integration: 支持从 HDFS、S3、Hive 等读取数据
 
-**Use Cases:**
-- 处理超大规模数据集（TB 级别）
-- 复杂特征工程和数据预处理
-- 分布式特征计算和聚合
-- 大规模规则回测和性能评估 
-
-#### 4.2.4 Local Files (本地文件)
-
-**Supported File Formats:**
-- **Excel**: 支持 .xlsx, .xls 格式
-  - Multiple sheet support: 支持多工作表读取
-  - Data type inference: 自动推断数据类型
-  - Header detection: 自动识别表头
-- **CSV**: 支持 .csv 格式
-  - Encoding detection: 自动检测文件编码（UTF-8, GBK, etc.）
-  - Delimiter detection: 自动检测分隔符（逗号、制表符等）
-  - Quote handling: 正确处理引号和转义字符
-- **TXT**: 支持 .txt 格式
-  - Line-by-line processing: 支持逐行处理
-  - Custom delimiter support: 支持自定义分隔符
-
-**Capabilities:**
-- File upload: 支持通过 Web UI 或 CLI 上传文件
-- Schema inference: 自动推断文件结构和数据类型
-- Data preview: 支持数据预览（前 N 行）
-- Chunked reading: 支持大文件分块读取
-- Data validation: 数据格式验证和错误提示
-
-**Use Cases:**
-- 导入外部数据进行分析
-- 上传测试数据进行规则验证
-- 导入特征数据进行特征工程
-- 导出分析结果到本地文件
- 
-
-#### 4.2.5 Service & API Integration (服务与API集成)
-
-**Supported Protocols:**
-- **REST API**: 支持 HTTP/HTTPS RESTful API 调用
-- **GraphQL**: 支持 GraphQL 查询接口
-- **gRPC**: 支持 gRPC 服务调用（可选）
-
-**Capabilities:**
-- API discovery: 支持 OpenAPI/Swagger 规范自动发现 API
-- Request generation: 根据自然语言描述生成 API 请求
-- Authentication: 支持多种认证方式（API Key, OAuth 2.0, Bearer Token）
-- Response parsing: 自动解析 JSON/XML 响应
-- Error handling: 优雅处理 API 错误和重试机制
-- Rate limiting: 支持 API 速率限制和退避策略
-
-**Use Cases:**
-- 调用外部风控服务获取风险评分
-- 查询第三方数据源（如征信数据、黑名单）
-- 集成业务系统获取用户信息
-- 调用特征服务获取实时特征值
-
-#### 4.2.6 Cloud Data Platforms (云数据平台)
-
-**Supported Platforms:**
-- **Snowflake**: 支持 Snowflake 数据仓库
-  - SQL query execution: 支持标准 SQL 查询
-  - Warehouse management: 支持虚拟仓库管理
-  - Schema discovery: 自动发现数据库和表结构
-  - Data sharing: 支持数据共享功能
-- **Databricks**: 支持 Databricks 平台
-  - Databricks SQL: 支持 SQL 查询接口
-  - Spark integration: 支持 Spark 作业执行
-  - Delta Lake support: 支持 Delta Lake 表查询
-  - Notebook execution: 支持 Databricks Notebook 执行（可选）
-
-**Capabilities:**
-- Cloud-native integration: 原生支持云数据平台特性
-- Scalable query execution: 利用云平台弹性扩展能力
-- Cost optimization: 查询成本优化建议
-- Data governance: 支持数据治理和权限管理
-- Multi-cloud support: 支持跨云平台数据访问
-
-**Use Cases:**
-- 查询云数据仓库中的历史数据
-- 利用云平台计算资源进行大规模分析
-- 跨平台数据整合和分析
-- 利用云平台 ML 能力进行特征工程
- 
 ---
 
-## 5. Interface Requirements
+## 6. Interface Requirements
 
-### 5.1 CLI (Command Line Interface)
+### 6.1 CLI (Command Line Interface)
 - **Target Users**: Engineers and power users
 - **Features**:
   - Interactive chat mode
@@ -252,7 +202,7 @@ Agent 需要支持多种数据源，以便能够从不同系统中获取数据�
   - Pipeline execution
   - Scripting support
 
-### 5.2 Web UI (Console & Dashboard)
+### 6.2 Web UI (Console & Dashboard)
 - **Target Users**: Analysts and business users
 - **Features**:
   - Visual conversation interface
@@ -262,38 +212,102 @@ Agent 需要支持多种数据源，以便能够从不同系统中获取数据�
 
 ---
 
-## 6. Non-Functional Requirements
+## 7. Non-Functional Requirements
 
-### 6.1 Reliability
-- **Result Acceptance Rate**: Agent 生成结果的用户接受率 ≥ 80%
-- **Task Completion Rate**: 任务完成率（不中断、不卡死）≥ 95%
-- **Error Recovery**: 遇到错误时能够优雅降级或提示用户干预
-- **Timeout Handling**: 长时间任务需要进度反馈，避免卡死假象
-- **Operation Atomicity**: 操作原子性，部署操作要么全部成功要么全部回滚
+### 7.1 Reliability
 
-### 6.2 Security
+| Metric | Target | Measurement Method |
+|--------|--------|-------------------|
+| Result Acceptance Rate | ≥ 80% | 用户对生成结果的 👍/👎 反馈统计 |
+| Task Completion Rate | ≥ 95% | 任务状态跟踪（成功/失败/超时） |
+| First-time Success Rate | ≥ 70% | 无需用户修正即可使用的比例 |
+| Average Task Duration | < 30s (simple) / < 5min (complex) | 任务计时器 |
+
+**Error Handling:**
+- Error Recovery: 遇到错误时优雅降级或提示用户干预
+- Timeout Handling: 长时间任务需要进度反馈，避免卡死假象（>10s 显示进度）
+- Operation Atomicity: 部署操作要么全部成功要么全部回滚
+- Retry Strategy: 可重试错误自动重试（最多 3 次，指数退避）
+
+### 7.2 Security
 - Authentication & Authorization (Role-based access control)
 - Audit logging (All operations logged)
 - Data privacy (Sensitive data anonymization)
 - No credential exposure in generated code
 
-### 6.3 Explainability
-- Show intermediate reasoning steps
-- Provide data sources and confidence scores
+### 7.3 Explainability
+- **Reasoning Trace**: 展示中间推理步骤和决策依据
+- **Data Provenance**: 标注数据来源（哪个表、哪个时间段）
+- **Confidence Score**: 对生成结果标注置信度（高/中/低）
+- **Alternative Options**: 低置信度时提供备选方案
+- **Query Preview**: 执行查询前展示 SQL/代码，允许用户确认
 
-### 6.4 Maintainability
+### 7.4 Maintainability
 - **Skills Support**: 支持用户自定义 Skills（参考 Claude Skills）
+- **Plugin Architecture**: 工具和数据源可插拔扩展
+- **Configuration Management**: 支持多环境配置（dev/staging/prod）
+- **Logging & Debugging**: 详细的执行日志，支持问题排查
 
 ---
 
 
-## 7. Constraints & Assumptions
+## 8. Constraints & Assumptions
 
-### 7.1 Technical Constraints
+### 8.1 Technical Constraints
+- Implement the Agent in TypeScript
 - Must generate valid RDL syntax
 - Cannot modify production data directly
 
-### 7.2 Business Constraints
-- Initial focus on credit risk 
-- Must support Chinese and English
+### 8.2 Business Constraints
+- Initial focus on credit risk
+- Response in user's language, default English
 - Deployment requires human approval
+
+### 8.3 Out of Scope (Phase 1)
+以下功能不在 MVP 范围内：
+- **Model Training**: 不涉及机器学习模型训练，仅支持规则策略
+- **Real-time Streaming**: 不支持实时流处理，仅支持批量查询
+- **Multi-tenancy**: 初版不支持多租户隔离
+- **Mobile App**: 仅支持 Web UI 和 CLI，不提供移动端
+- **Automated Deployment**: 部署需人工审批，不支持全自动上线
+- **External Integrations**: 不集成外部 BI 工具（如 Tableau、Metabase）
+
+---
+
+## 9. Agent Runtime Requirements
+
+### 9.1 Context & Memory Management
+- **Session Context**: 单次会话内保持完整对话历史
+- **Working Memory**: 当前任务相关的中间状态（查询结果、生成的代码等）
+- **Long-term Memory**: 跨会话的用户偏好、常用规则模板（可选，P2）
+
+### 9.2 Human-in-the-Loop
+| Scenario | Behavior |
+|----------|----------|
+| 歧义输入 | 主动询问澄清，提供选项 |
+| 高风险操作（部署、删除） | 必须用户确认后执行 |
+| 低置信度结果 | 标注置信度，建议人工复核 |
+| 长时间任务 | 定期同步进度，允许用户中断或修改目标 |
+
+### 9.3 Tool Invocation Transparency
+- 显示当前正在调用的工具名称和参数
+- 展示工具执行结果摘要
+- 支持展开查看完整输入输出（可折叠）
+
+### 9.4 Cost Control
+- **Token Budget**: 单次对话 token 上限（默认 100K，可配置）
+- **Query Limit**: 单次任务数据库查询次数上限（默认 50 次）
+- **Timeout**: 单个工具调用超时（默认 60s），整体任务超时（默认 10min）
+
+---
+
+## 10. Success Metrics
+
+| Metric | Definition | Target (6 months) |
+|--------|------------|-------------------|
+| Daily Active Users | 每日使用 Agent 的独立用户数 | 50+ |
+| Task Success Rate | 任务完成且用户满意的比例 | ≥ 75% |
+| Time Saved | 对比人工操作节省的时间 | ≥ 50% |
+| Rule Quality Score | 生成规则的精准率/召回率 | 与人工持平 |
+| NPS | 用户净推荐值 | ≥ 30 |
+

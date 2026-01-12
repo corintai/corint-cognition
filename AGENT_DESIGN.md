@@ -2,42 +2,63 @@
 
 ## Executive Summary
 
+> **用一个 AI Agent + 极少量核心人员，高效运营风控业务。**
+>
+> 用户只关心**规则、指标、策略和结果**，不关心代码。
+
 CORINT Risk Agent is an AI-native assistant designed for risk management professionals, enabling natural language interaction with the CORINT decision engine for risk analysis, strategy optimization, model iteration, anomaly detection, and data analytics.
 
-**Design Philosophy**: Simplicity, Transparency, Tool-centric
+**Design Philosophy**: Model-driven, Tool-centric, Sandbox-isolated, Skills-first
 
-**Target Users**: Risk analysts, modelers, data scientists, and business stakeholders
+**Target Users**: 
+- **Risk Strategy Analysts**: Design and optimize risk strategies
+- **Risk Modeling Engineers**: Feature engineering and model development
+- **Business Stakeholders**: Monitor metrics and make decisions
+
+**Application Scenarios**:
+- **Credit Risk Management** (Priority): Credit approval, limit management, overdue prediction
+- **Fraud Detection**: Transaction fraud, account takeover, identity fraud
+
+**User Experience**: 
+- **Web UI**: Manus-like conversational interface
+- **CLI**: Claude Code-style interactive terminal
 
 ---
 
 ## 1. Design Principles
 
-### 1.1 Core Principles (Based on Anthropic Agent Research)
+### 1.1 Core Principles (Aligned with REQUIREMENT.md)
 
-1. **Simplicity First**
-   - Start with simple prompts and workflows
-   - Add complexity only when necessary
-   - Prefer deterministic flows over autonomous decision-making
+1. **Agent Architecture**
+   - Brain (LLM), Environment (Sandbox + Runtime), Tools
+   - Clear boundaries between reasoning, execution, and environment
 
-2. **Transparency & Explainability**
-   - Every decision must be explainable
-   - Show intermediate reasoning steps
-   - Provide evidence and data sources
+2. **Model-driven**
+   - The model decides the task path; avoid pre-set workflows
+   - Deterministic workflows are optional and policy-driven
 
-3. **Tool-Centric Design**
-   - Agent as orchestrator, not executor
-   - Well-documented tool interfaces
-   - Clear input/output contracts
+3. **Planning Stage**
+   - Explicit planning step for complex tasks
+   - Iterate Plan -> Observation -> Adjustment
 
-4. **Human-in-the-Loop**
-   - Agent suggests, human approves
-   - Critical operations require confirmation
-   - Iterative refinement workflow
+4. **Coding & Tool Calling**
+   - Agent can write code, debug, run, and call tools/APIs
+   - Covers long-tail tasks beyond fixed workflows
 
-5. **DSL-Native**
-   - Generate CORINT RDL (Rules, Rulesets, Pipelines)
-   - Leverage existing compiler and runtime
-   - No runtime LLM dependencies in production
+5. **Async Communication & Interruptions**
+   - Async execution with progress updates
+   - User can interrupt, modify goals, or terminate tasks
+
+6. **Sandbox Cloud Isolation**
+   - Isolated sandbox per session for safety and continuity
+   - Supports long-running chains of work
+
+7. **Scale Out**
+   - Parallel sub-tasks across multiple sandboxes
+   - Aggregate results with traceable provenance
+
+8. **Skills Support**
+   - Users define Skills to extend capabilities and constraints
 
 ---
 
@@ -46,691 +67,313 @@ CORINT Risk Agent is an AI-native assistant designed for risk management profess
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    User Interface Layer                      │
-│  ┌──────────────┐  ┌──────────────┐                         │
-│  │     CLI      │  │   Web UI     │                         │
-│  │   Terminal   │  │   Dashboard  │                         │
-│  └──────┬───────┘  └──────┬───────┘                         │
-└─────────┼──────────────────┼─────────────────────────────────┘
-          │                  │
-          └──────────────────┼──────────────────
-                             ▼
+│                                                               │
+│       ┌─────────────────┐       ┌─────────────────┐         │
+│       │    CLI Tool     │       │     Web UI      │         │
+│       │ (Claude Code)   │       │ (Manus-like)    │         │
+│       └────────┬────────┘       └────────┬────────┘         │
+│                │                         │                   │
+└────────────────┼─────────────────────────┼───────────────────┘
+                 │                         │
+                 └────────────┬────────────┘
+                              ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                  CORINT Risk Agent Core                      │
 │                                                               │
-│  ┌────────────────────────────────────────────────────┐     │
-│  │         Agent Orchestrator                          │     │
-│  │  - Intent Understanding                             │     │
-│  │  - Task Planning & Decomposition                    │     │
-│  │  - Tool Selection & Invocation                      │     │
-│  │  - Result Synthesis                                 │     │
-│  └────────────────┬───────────────────────────────────┘     │
-│                   │                                          │
-│  ┌────────────────┴───────────────────────────────────┐     │
-│  │           Tool Registry & Executor                  │     │
-│  └────────────────┬───────────────────────────────────┘     │
-└───────────────────┼──────────────────────────────────────────┘
-                    ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      Agent Tools                             │
+│  ┌───────────────────────┐  ┌────────────────────────────┐  │
+│  │   Context Manager     │  │      Cost Controller       │  │
+│  │  • Session Memory     │  │  • Token Budget            │  │
+│  │  • Working Memory     │  │  • Query Limit             │  │
+│  │  • User Profile       │  │  • Timeout Control         │  │
+│  └───────────────────────┘  └────────────────────────────┘  │
 │                                                               │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │  Analysis    │  │  Generation  │  │  Execution   │      │
-│  │   Tools      │  │    Tools     │  │    Tools     │      │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
-│         │                  │                  │              │
-│  • Query Decision  • Generate RDL    • Test Rules           │
-│  • Analyze Metrics • Optimize Rules  • Deploy Config        │
-│  • Find Patterns   • Create Features • Backtest Strategy     │
-│  • Detect Anomaly  • Gen SQL Query   • A/B Test              │
-└─────────┼──────────────────┼──────────────────┼─────────────┘
-          │                  │                  │
-          └──────────────────┼──────────────────┘
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │                   Knowledge Base                     │    │
+│  │  • Domain Concepts (DPD, KS, AUC, Vintage...)       │    │
+│  │  • RDL Syntax & Templates                            │    │
+│  │  • Strategy Patterns & Best Practices                │    │
+│  │  • Self-Evolution (learn from user feedback)         │    │
+│  └─────────────────────────────────────────────────────┘    │
+│                                                               │
+│  ┌────────────────────────────────────────────────────┐     │
+│  │                   Planning Module                   │     │
+│  │  - Intent/Risk Assessment                           │     │
+│  │  - Task Planning & Decomposition                    │     │
+│  │  - Dynamic Plan Revision (decompose/overwrite)      │     │
+│  └────────────────────────────────────────────────────┘     │
+│                         │         ▲                          │
+│                         ▼         │ (revise)                 │
+│  ┌────────────────────────────────┴───────────────────┐     │
+│  │                   Execution Module                  │     │
+│  │                                                      │     │
+│  │  ┌──────────────────────────────────────────────┐  │     │
+│  │  │  Task Manager │ Sandbox Manager │ Parallel   │  │     │
+│  │  │  (TODO, deps) │ (isolated env)  │ Executor   │  │     │
+│  │  └──────────────────────────────────────────────┘  │     │
+│  │                                                      │     │
+│  │  ┌──────────────────────────────────────────────┐  │     │
+│  │  │              Agent Tools                      │  │     │
+│  │  │  • Foundation Tools (基础访问)                 │  │     │
+│  │  │  • Domain Calculation Tools (领域计算)         │  │     │
+│  │  │  • Domain Action Tools (领域操作)              │  │     │
+│  │  │  • MCP Extensions (外部数据源/服务)            │  │     │
+│  │  │  • User-defined Skills                        │  │     │
+│  │  └──────────────────────────────────────────────┘  │     │
+│  └────────────────────────────────────────────────────┘     │
+│                         │                                    │
+│                         ▼                                    │
+│  ┌────────────────────────────────────────────────────┐     │
+│  │                  Evaluation Module                  │     │
+│  │  - Result Synthesis & Confidence Scoring            │     │
+│  │  - Validation & Uncertainty Handling                │     │
+│  │  - Plan Adjustment or User Escalation               │     │
+│  └────────────────────────────────────────────────────┘     │
+└─────────────────────────────────────────────────────────────┘
+                             │
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              CORINT Decision Engine Stack                    │
-│                                                               │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │   Decision   │  │  Repository  │  │   Runtime    │      │
-│  │    Engine    │  │   (DSL)      │  │   Services   │      │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
-│         │                  │                  │              │
-│  ┌──────┴──────────────────┴──────────────────┴───────┐     │
-│  │            Data Sources & Storage                   │     │
-│  │  • PostgreSQL  • Redis  • ClickHouse                │     │
-│  └─────────────────────────────────────────────────────┘     │
+│       Deploy strategies for A/B Test or Shadow Test          │
+│                                                              │
+│       ┌─────────────────┐       ┌─────────────────┐         │
+│       │    Decision     │       │   Repository    │         │
+│       │     Engine      │       │     (RDL)       │         │
+│       └─────────────────┘       └─────────────────┘         │
+│                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
----
+**Architecture Notes**:
+- **Context Manager**: Maintains conversation context across turns:
+  - **Session Memory**: Current conversation history
+  - **Working Memory**: Intermediate results and task state
+  - **User Profile**: Persistent user preferences and habits (cross-session)
+- **Cost Controller**: Enforces token budget (100K default), query limits (50/task), and timeouts.
+- **Knowledge Base**: Risk domain knowledge repository with multiple layers:
+  - **Project Config (CORINT.md)**: Project-specific context file describing data sources, naming conventions, and business rules
+  - **Domain Concepts**: DPD, overdue rate, KS, AUC, Vintage, flow rate definitions
+  - **RDL Syntax**: CORINT DSL grammar, Rule/Ruleset/Pipeline templates
+  - **Strategy Patterns**: Common rule patterns (multi-loan detection, high-risk region, credit limit tiers)
+  - **Feature Templates**: Behavioral, device, graph feature calculation logic
+  - **Best Practices**: Threshold tuning experience, regulatory compliance constraints
+  - **Self-Evolution**: Learn from user feedback via ADD/MODIFY/DELETE operations on knowledge
+- **Task Manager**: Converts plans into TODO lists with dependencies and status tracking.
+- **Sandbox Manager**: Allocates isolated cloud environments per session for safety and continuity.
+- **Parallel Executor**: Enables scale-out sub-tasks across multiple sandboxes with result aggregation.
+- **Agent Tools**: Managed by Execution Module; includes Foundation, Domain Calculation, Domain Action tools, MCP extensions, and user-defined Skills.
+- **MCP Extensions**: Support Model Context Protocol for pluggable data sources and external services. MCP servers can be configured to provide additional tools dynamically.
+- **Dynamic Plan Revision**: Execution can trigger plan adjustments via two modes:
+  - **decompose**: Break current task into smaller sub-tasks when complexity is discovered
+  - **overwrite**: Replace remaining plan while preserving completed tasks when original plan is infeasible
 
-## 3. Agent Workflow Patterns
+### 2.1 Task Status
 
-### 3.1 Workflow vs Agent Decision
+| Status | Description |
+|--------|-------------|
+| `pending` | Task not yet started |
+| `running` | Task currently executing |
+| `completed` | Task finished successfully |
+| `failed` | Task execution failed |
+| `blocked` | Waiting for user input or confirmation |
 
-**Workflow** (Deterministic): Pre-defined steps with clear paths
-- Rule testing workflow
-- Deployment pipeline
-- Report generation
+### 2.2 Retry Mechanism
 
-**Agent** (Autonomous): Model makes routing decisions
-- Open-ended analysis
-- Strategy optimization
-- Root cause investigation
+| Level | Max Retries | Strategy | Trigger |
+|-------|-------------|----------|---------|
+| Action | 3 | Exponential backoff | Tool execution failure, invalid response format |
+| Task | 10 (total) | Re-plan or escalate | Repeated action failures |
+| Session | N/A | User notification | Token budget exceeded, timeout |
 
-### 3.2 Common Patterns
+### 2.3 Checkpoint Mechanism
 
-#### Pattern 1: Prompt Chaining
-Sequential tool invocations with context passing.
+Auto-save state before destructive operations, enabling rollback:
 
-```
-User: "Why is the decline rate increasing?"
+| Checkpoint Type | Trigger | Stored Content |
+|-----------------|---------|----------------|
+| Config Checkpoint | Before `deploy_config` | Previous config version, deployment metadata |
+| Rule Checkpoint | Before rule modification | Original RDL content, validation results |
+| Session Checkpoint | Periodic (every N actions) | Task state, working memory, tool call history |
 
-Step 1: Query decision metrics (past 7 days)
-  ↓ [metrics data]
-Step 2: Identify top declining rules
-  ↓ [rule IDs + scores]
-Step 3: Analyze rule trigger patterns
-  ↓ [pattern analysis]
-Step 4: Generate insights + recommendations
-  ↓ [final report]
-```
+**Rollback**: User can restore to any checkpoint via `rollback_config` tool or `/restore` command.
 
-#### Pattern 2: Routing
-Classify intent and route to specialized handlers.
-
-```
-User Input
-    ↓
-Intent Classification
-    ├─→ "analyze" → Analysis Agent
-    ├─→ "generate" → Generation Agent
-    ├─→ "optimize" → Optimization Agent
-    └─→ "debug" → Debug Agent
-```
-
-#### Pattern 3: Parallelization
-Execute independent tasks concurrently.
-
-```
-User: "Analyze user_123's risk profile"
-
-Parallel Execution:
-├─→ Query transaction history
-├─→ Query behavior features
-├─→ Query device fingerprints
-└─→ Query graph connections
-
-Aggregate Results → Final Report
-```
-
-#### Pattern 4: Orchestrator-Workers
-Orchestrator plans, workers execute.
-
-```
-Orchestrator: Break down "optimize fraud detection"
-    ├─→ Worker 1: Analyze false positive cases
-    ├─→ Worker 2: Test rule threshold variations
-    ├─→ Worker 3: Evaluate feature importance
-    └─→ Worker 4: Generate optimized ruleset
-
-Orchestrator: Synthesize results → Final strategy
-```
-
-#### Pattern 5: Evaluator-Optimizer
-Iterative improvement loop.
-
-```
-Generate Rule → Test → Evaluate
-                  ↓
-            Acceptable? ─NO→ Optimize → Generate Rule
-                  ↓ YES
-              Return Final Rule
-```
 
 ---
 
-## 4. Tool Categories & Specifications
+## 3. Built-in Tools
 
-### 4.1 Analysis Tools
+### 3.1 Tool Design Philosophy
 
-#### Tool: `query_decision_results`
-**Purpose**: Query historical decision results from database
+**工具边界原则**：
+- **工具负责**：执行确定性操作、访问外部系统、执行复杂计算、返回结构化数据
+- **LLM 负责**：推理、分析、建议、决策、对比、归因
 
-**Input**:
-```json
-{
-  "filters": {
-    "pipeline_id": "string (optional)",
-    "decision": "approve|decline|review (optional)",
-    "start_time": "ISO8601 timestamp",
-    "end_time": "ISO8601 timestamp"
-  },
-  "aggregation": "count|sum|avg|group_by",
-  "group_by": "pipeline_id|decision|triggered_rule"
-}
+**工具选择策略**：
+- **内置工具优先**：优先使用预定义的领域工具，保证执行效率和结果一致性
+- **代码兜底**：当内置工具无法满足需求时，Agent 可编写代码解决长尾问题
+- **沙盒隔离**：所有代码在隔离沙盒中执行，确保安全
+
+**不应成为工具的能力**：
+- `root_cause_analysis` → LLM 根据数据自己推理
+- `recommend_strategy` → LLM 根据模拟结果自己推荐
+- `suggest_cleaning` → LLM 看到数据问题后自己建议
+- `detect_anomalies` → LLM 看统计数据后自己判断
+- `compare_strategies` → LLM 看到多个策略的指标后自己对比
+
+### 3.2 Foundation Tools (基础访问)
+
+最底层的原子工具，提供数据访问、文件操作和代码执行能力。
+
+| Tool | Purpose | Input | Output |
+|------|---------|-------|--------|
+| `query_sql` | 执行 SQL 查询 | `sql`, `data_source` | DataFrame / JSON |
+| `explore_schema` | 获取表结构、字段、注释 | `table_name`, `data_source` | Schema JSON |
+| `read_file` | 读取本地文件 | `file_path` | Content (text/binary) |
+| `write_file` | 写入本地文件 | `file_path`, `content` | Success / Fail |
+| `list_files` | 列出目录文件 | `directory`, `pattern` | File list |
+| `call_api` | 调用外部 REST API | `url`, `method`, `params` | Response JSON |
+| `execute_code` | 在沙盒中执行代码 | `language`, `code` | Execution result |
+| `run_shell` | 执行 Shell 命令 | `command`, `working_dir` | stdout / stderr |
+
+**说明**：
+- LLM 负责根据需求生成正确的 SQL
+- `execute_code` 优先使用 Python（数据分析生态丰富），用于处理内置工具无法覆盖的长尾需求
+- `run_shell` 用于执行系统命令，需在沙盒环境中运行
+
+### 3.3 Domain Calculation Tools (领域计算)
+
+封装风控领域的**确定性计算逻辑**，这些计算 LLM 无法自己完成。
+
+| Tool | Purpose | Input | Output |
+|------|---------|-------|--------|
+| `calculate_metrics` | 计算模型评估指标 | `predictions`, `labels`, `metrics[]` | KS / AUC / PSI / IV / Gini |
+| `calculate_vintage` | 计算账龄分析矩阵 | `loan_data`, `observation_months` | Vintage Matrix |
+| `calculate_dpd_distribution` | 计算 DPD 逾期分布 | `repayment_data`, `bucket_days[]` | DPD Histogram |
+| `calculate_flow_rate` | 计算迁徙率 | `collection_data`, `periods` | Flow Rate Matrix |
+| `simulate_threshold` | 模拟单阈值效果 | `score_data`, `threshold` | PassRate / BadRate / Volume |
+| `simulate_strategy` | 模拟多阈值策略效果 | `score_data`, `strategy_config` | Segment-level metrics |
+| `backtest_rule` | 规则历史回测 | `rule_definition`, `historical_data` | HitRate / Precision / Recall |
+| `validate_rdl` | RDL 语法校验 | `rdl_content` | Valid / Syntax Errors |
+| `validate_semantics` | RDL 语义校验 | `rdl_content`, `schema` | Valid / Semantic Errors |
+
+### 3.4 Domain Action Tools (领域操作)
+
+执行有副作用的领域操作，通常需要用户确认。
+
+| Tool | Purpose | Input | Output |
+|------|---------|-------|--------|
+| `deploy_config` | 部署配置到仓库 | `config`, `env`, `version` | Deployment Result |
+| `rollback_config` | 回滚到指定版本 | `config_name`, `target_version` | Rollback Result |
+| `create_ab_test` | 创建 A/B 实验 | `variants[]`, `traffic_split` | Experiment ID |
+| `stop_ab_test` | 停止 A/B 实验 | `experiment_id` | Stop Result |
+| `export_report` | 导出报告文件 | `content`, `format`, `path` | File Path |
+
+### 3.5 Tool Execution Flow
+
+```
+User Request
+    │
+    ▼
+┌─────────────────────────────────────────────────────────┐
+│                        LLM                               │
+│  1. 理解用户意图                                          │
+│  2. 规划执行步骤                                          │
+│  3. 生成 SQL / 选择工具                                   │
+│  4. 解读工具返回结果                                      │
+│  5. 推理、分析、给出建议                                  │
+└─────────────────────────────────────────────────────────┘
+    │
+    ▼ (Tool Calls)
+┌─────────────────────────────────────────────────────────┐
+│               Foundation Tools                           │
+│  query_sql → 获取原始数据                                │
+│  explore_schema → 理解数据结构                           │
+└─────────────────────────────────────────────────────────┘
+    │
+    ▼ (如需复杂计算)
+┌─────────────────────────────────────────────────────────┐
+│            Domain Calculation Tools                      │
+│  calculate_metrics → 获取 KS/AUC                        │
+│  simulate_threshold → 获取不同阈值效果                   │
+│  backtest_rule → 获取规则回测结果                        │
+└─────────────────────────────────────────────────────────┘
+    │
+    ▼ (LLM 分析结果，给出建议)
+┌─────────────────────────────────────────────────────────┐
+│                        LLM                               │
+│  "根据回测结果，建议将阈值从 0.6 调整到 0.55，           │
+│   预计通过率提升 3%，坏账率仅增加 0.2%"                  │
+└─────────────────────────────────────────────────────────┘
+    │
+    ▼ (用户确认后)
+┌─────────────────────────────────────────────────────────┐
+│              Domain Action Tools                         │
+│  deploy_config → 部署新策略                              │
+└─────────────────────────────────────────────────────────┘
 ```
 
-**Output**:
-```json
-{
-  "results": [
-    {
-      "key": "fraud_detection",
-      "count": 1523,
-      "approval_rate": 0.87,
-      "decline_rate": 0.08,
-      "review_rate": 0.05
-    }
-  ],
-  "total": 1523,
-  "time_range": "2025-01-04 to 2025-01-11"
-}
-```
+## 4. Skills Design
+
+### 4.1 Skills vs Tools
+
+| | Tools | Skills |
+|---|-------|--------|
+| 来源 | 系统内置 | 用户定义 |
+| 粒度 | 原子操作 | 组合工作流 |
+| 扩展性 | 需开发 | Markdown 配置 |
+| 示例 | query_sql, backtest_rule | 日报生成, 规则优化流程 |
+
+### 4.2 Built-in Skills
+
+| Skill | Description | 典型触发 |
+|-------|-------------|----------|
+| `daily_report` | 生成风控日报（放款、通过率、DPD 分布） | "生成今日风控报告" |
+| `rule_optimization` | 规则阈值优化流程（回测→分析→建议） | "优化规则 R001 的阈值" |
+| `vintage_analysis` | 账龄分析报告 | "分析 2024Q1 放款的逾期表现" |
+| `strategy_comparison` | 多策略效果对比 | "对比这三个策略方案" |
+| `anomaly_investigation` | 指标异常根因分析 | "为什么昨天拒绝率上升了" |
+
+### 4.3 Custom Skills
+
+用户可定义自己的 Skills 扩展 Agent 能力：
+
+- **格式**: Markdown 文件描述工作流程、输入输出、示例对话
+- **存储**: 本地目录或团队共享仓库
+- **调用**: 通过自然语言触发或显式命令调用
+
+**典型自定义场景**:
+- 特定渠道的分析流程
+- 公司内部的合规检查流程
+- 定制化的报告模板
 
 ---
 
-#### Tool: `analyze_rule_performance`
-**Purpose**: Analyze rule effectiveness and patterns
-
-**Input**:
-```json
-{
-  "rule_id": "string",
-  "time_window": "1h|24h|7d|30d",
-  "metrics": ["trigger_rate", "precision", "recall", "false_positive_rate"]
-}
-```
-
-**Output**:
-```json
-{
-  "rule_id": "high_velocity_login",
-  "trigger_count": 342,
-  "trigger_rate": 0.034,
-  "precision": 0.76,
-  "false_positive_rate": 0.24,
-  "common_patterns": [
-    "Triggers most at 2-4 AM UTC",
-    "80% involve new devices",
-    "Top country: US (45%)"
-  ],
-  "recommendations": [
-    "Consider tightening threshold from 5 to 3",
-    "Add device_age condition"
-  ]
-}
-```
-
----
-
-#### Tool: `detect_anomalies`
-**Purpose**: Detect statistical anomalies in features or metrics
-
-**Input**:
-```json
-{
-  "feature_name": "string",
-  "entity_id": "string (optional)",
-  "method": "zscore|iqr|isolation_forest",
-  "window": "7d|30d|90d",
-  "threshold": 3.0
-}
-```
-
-**Output**:
-```json
-{
-  "anomalies_detected": 12,
-  "details": [
-    {
-      "entity_id": "user_8392",
-      "feature": "txn_amount",
-      "value": 15000,
-      "expected_range": [100, 500],
-      "zscore": 5.2,
-      "timestamp": "2025-01-11T10:23:45Z"
-    }
-  ]
-}
-```
-
----
-
-### 4.2 Generation Tools
-
-#### Tool: `generate_rule`
-**Purpose**: Generate CORINT RDL rule from natural language
-
-**Input**:
-```json
-{
-  "description": "Flag transactions over $10,000 from accounts less than 30 days old",
-  "rule_type": "fraud|compliance|behavior",
-  "score": 80
-}
-```
-
-**Output**:
-```yaml
-rule:
-  id: high_amount_new_account
-  name: High Amount from New Account
-  description: Flag transactions over $10,000 from accounts less than 30 days old
-  
-  when:
-    all:
-      - event.type == "transaction"
-      - event.amount > 10000
-      - event.account.age_days < 30
-  
-  score: 80
-  reason: "High-value transaction from new account"
-```
-
----
-
-#### Tool: `generate_ruleset`
-**Purpose**: Generate ruleset with decision logic
-
-**Input**:
-```json
-{
-  "description": "Account takeover detection with 3 rules",
-  "rules": ["new_device_login", "unusual_location", "behavior_anomaly"],
-  "strategy": "score_based",
-  "thresholds": {
-    "deny": 150,
-    "review": 100,
-    "approve": 0
-  }
-}
-```
-
-**Output**:
-```yaml
-ruleset:
-  id: takeover_detection
-  name: Account Takeover Detection
-  
-  rules:
-    - new_device_login
-    - unusual_location
-    - behavior_anomaly
-  
-  decision_logic:
-    - condition: total_score >= 150
-      action: deny
-      reason: "High takeover risk"
-    - condition: total_score >= 100
-      action: review
-      reason: "Medium takeover risk"
-    - default: true
-      action: approve
-```
-
----
-
-#### Tool: `generate_feature`
-**Purpose**: Generate feature definition from description
-
-**Input**:
-```json
-{
-  "description": "Count user's failed login attempts in past 1 hour",
-  "feature_type": "aggregation",
-  "datasource": "postgresql_events"
-}
-```
-
-**Output**:
-```yaml
-- name: cnt_userid_failed_login_1h
-  type: aggregation
-  method: count
-  datasource: postgresql_events
-  entity: events
-  dimension: user_id
-  dimension_value: "{event.user_id}"
-  window: 1h
-  when:
-    all:
-      - type == "login"
-      - status == "failed"
-```
-
----
-
-### 4.3 Execution Tools
-
-#### Tool: `test_rule`
-**Purpose**: Test rule against sample events
-
-**Input**:
-```json
-{
-  "rule_yaml": "string (YAML content)",
-  "test_events": [
-    {
-      "type": "transaction",
-      "amount": 12000,
-      "account": {"age_days": 15}
-    }
-  ]
-}
-```
-
-**Output**:
-```json
-{
-  "results": [
-    {
-      "event_index": 0,
-      "triggered": true,
-      "score": 80,
-      "reason": "High-value transaction from new account"
-    }
-  ]
-}
-```
-
----
-
-#### Tool: `backtest_strategy`
-**Purpose**: Backtest rule/ruleset on historical data
-
-**Input**:
-```json
-{
-  "config_yaml": "string (Rule/Ruleset YAML)",
-  "data_source": "decision_results",
-  "start_date": "2025-01-01",
-  "end_date": "2025-01-11",
-  "sample_size": 10000
-}
-```
-
-**Output**:
-```json
-{
-  "total_samples": 10000,
-  "triggered": 340,
-  "true_positives": 258,
-  "false_positives": 82,
-  "true_negatives": 9500,
-  "false_negatives": 160,
-  "precision": 0.758,
-  "recall": 0.617,
-  "f1_score": 0.680,
-  "recommendations": [
-    "Increase threshold to reduce false positives",
-    "Precision is good, but recall is low - consider adding more conditions"
-  ]
-}
-```
-
----
-
-#### Tool: `deploy_config`
-**Purpose**: Deploy rule/ruleset to repository
-
-**Input**:
-```json
-{
-  "config_type": "rule|ruleset|pipeline|feature",
-  "config_yaml": "string (YAML content)",
-  "target_path": "repository/library/rules/fraud/new_rule.yaml",
-  "dry_run": false
-}
-```
-
-**Output**:
-```json
-{
-  "status": "success",
-  "deployed_to": "repository/library/rules/fraud/new_rule.yaml",
-  "validation": {
-    "syntax": "valid",
-    "semantic": "valid",
-    "conflicts": []
-  }
-}
-```
-
----
-
-### 4.4 Data Tools
-
-#### Tool: `query_features`
-**Purpose**: Query feature values for specific entities
-
-**Input**:
-```json
-{
-  "entity_type": "user|transaction|device",
-  "entity_id": "string",
-  "features": ["cnt_login_24h", "sum_txn_amt_7d", "distinct_device_30d"]
-}
-```
-
-**Output**:
-```json
-{
-  "entity_id": "user_123",
-  "features": {
-    "cnt_login_24h": 5,
-    "sum_txn_amt_7d": 15000,
-    "distinct_device_30d": 3
-  },
-  "timestamp": "2025-01-11T10:30:00Z"
-}
-```
-
----
-
-#### Tool: `explore_schema`
-**Purpose**: Explore database schema and available fields
-
-**Input**:
-```json
-{
-  "datasource": "postgresql_events",
-  "entity": "events|users|transactions"
-}
-```
-
-**Output**:
-```json
-{
-  "entity": "events",
-  "fields": [
-    {"name": "id", "type": "UUID", "description": "Event ID"},
-    {"name": "type", "type": "STRING", "description": "Event type"},
-    {"name": "user_id", "type": "STRING", "description": "User identifier"},
-    {"name": "amount", "type": "DECIMAL", "description": "Transaction amount"},
-    {"name": "timestamp", "type": "TIMESTAMP", "description": "Event time"}
-  ]
-}
-```
-
----
-
-## 5. Conversation Examples
-
-### Example 1: Risk Analysis
-
-```
-User: "Why did the decline rate increase yesterday?"
-
-Agent: I'll analyze the decline rate trend. Let me query the decision results...
-
-[Tool: query_decision_results]
-{
-  "filters": {"start_time": "2025-01-10T00:00:00Z", "end_time": "2025-01-11T00:00:00Z"},
-  "aggregation": "group_by",
-  "group_by": "decision"
-}
-
-Result: Decline rate increased from 8% to 15% (875 more declines).
-
-Let me identify which rules contributed most...
-
-[Tool: analyze_rule_performance]
-{
-  "time_window": "24h",
-  "metrics": ["trigger_rate"]
-}
-
-Analysis:
-- Rule "high_velocity_login" triggers increased 3x
-- Rule "new_device_risk" triggers increased 2x
-- Most declines occurred 2-4 AM UTC
-
-Root cause: Possible bot attack targeting account login.
-
-Recommendation: 
-1. Review "high_velocity_login" threshold (currently 5 attempts/hour)
-2. Consider adding CAPTCHA challenge instead of direct decline
-3. Monitor pattern over next 24h
-
-Would you like me to generate an optimized ruleset?
-```
-
----
-
-### Example 2: Strategy Optimization
-
-```
-User: "Optimize the fraud detection ruleset to reduce false positives"
-
-Agent: I'll analyze the current fraud detection performance...
-
-[Tool: query_decision_results + analyze_rule_performance]
-
-Current metrics:
-- Precision: 0.76 (24% false positives)
-- Recall: 0.82
-- Top FP contributors: "high_amount_txn" (45%), "velocity_check" (30%)
-
-Let me backtest threshold adjustments...
-
-[Tool: backtest_strategy with variations]
-
-Tested 5 configurations:
-1. Original: Precision 0.76, Recall 0.82
-2. Increase high_amount threshold: Precision 0.83, Recall 0.78 ✓
-3. Add device_age condition: Precision 0.81, Recall 0.80 ✓
-4. Remove velocity_check: Precision 0.72, Recall 0.85 ✗
-
-Best configuration: #2 + #3 combined
-- Precision: 0.85 (+12%)
-- Recall: 0.79 (-4%)
-- F1-score: 0.82 (+5%)
-
-Generated optimized ruleset:
-
-[Shows optimized YAML]
-
-Would you like me to:
-A) Deploy to staging for A/B test
-B) Backtest on larger dataset
-C) Adjust parameters further
-```
-
----
-
-### Example 3: Feature Discovery
-
-```
-User: "Find features that correlate with fraud for user transactions"
-
-Agent: I'll analyze feature importance for fraud detection...
-
-[Tool: query_features + detect_anomalies]
-
-Analyzing 50 features across 10,000 transactions (2,000 fraud cases)...
-
-Top 10 features correlated with fraud:
-
-1. **distinct_device_7d** (correlation: 0.68)
-   - Fraudulent: avg 4.2 devices
-   - Normal: avg 1.3 devices
-   
-2. **cnt_failed_login_24h** (correlation: 0.62)
-   - Fraudulent: avg 8.5 attempts
-   - Normal: avg 0.4 attempts
-
-3. **txn_amount_zscore** (correlation: 0.55)
-   - Fraudulent: avg 3.8σ deviation
-   - Normal: avg 0.2σ deviation
-
-[... more features ...]
-
-Recommendation: Add these features to your fraud ruleset:
-- Create rule for distinct_device_7d > 3
-- Strengthen failed login threshold to 5 (current: 10)
-
-Would you like me to generate a new rule incorporating these features?
-```
-
----
-
-## 6. Implementation Plan
-
-### Phase 1: Foundation (Week 1-2)
-- [ ] Agent orchestrator framework (Rust + LLM provider integration)
-- [ ] Tool registry and execution framework
-- [ ] Basic CLI interface
-- [ ] 5 core tools: query_decision_results, generate_rule, test_rule, analyze_rule_performance, deploy_config
-
-### Phase 2: Analysis Capabilities (Week 3-4)
-- [ ] Advanced query tools (aggregations, filtering)
-- [ ] Anomaly detection tool
-- [ ] Feature exploration tool
-- [ ] Schema introspection tool
-- [ ] Backtest framework
-
-### Phase 3: Generation & Optimization (Week 5-6)
-- [ ] Ruleset generation
-- [ ] Feature generation
-- [ ] Pipeline generation
-- [ ] Strategy optimization tool (threshold tuning, feature selection)
-- [ ] A/B test framework
-
-### Phase 4: Workflows & UI (Week 7-8)
-- [ ] Pre-defined workflows (analysis, optimization, deployment)
-- [ ] Web dashboard integration
-- [ ] Conversation history & context management
-- [ ] Multi-turn optimization loops
-
----
-
-## 7. Technical Stack
+## 5. Technical Stack
 
 ### Core Components
-- **Language**: Rust (agent core, tools, integration with corint-decision)
-- **LLM Integration**: 
+- **Language**: TypeScript (Node.js runtime)
+- **LLM Integration**:
   - OpenAI GPT-4 Turbo (primary)
   - Anthropic Claude 3.5 Sonnet (alternative)
   - DeepSeek (cost-effective option)
-- **Tool Execution**: Async Rust with Tokio
-- **DSL Generation**: Leverage `corint-llm` crate
+- **Tool Execution**: Async/await with native Promise 
 
 ### Architecture Modules
 ```
 corint-cognition/
-├── crates/
-│   ├── corint-agent-core/        # Agent orchestrator
-│   │   ├── orchestrator.rs       # Main agent loop
-│   │   ├── intent_classifier.rs  # Intent understanding
-│   │   ├── planner.rs            # Task planning
-│   │   └── synthesizer.rs        # Result synthesis
-│   ├── corint-agent-tools/       # Tool implementations
-│   │   ├── analysis/             # Analysis tools
-│   │   ├── generation/           # Generation tools
-│   │   ├── execution/            # Execution tools
-│   │   └── data/                 # Data tools
-│   ├── corint-agent-cli/         # CLI interface
-│   └── corint-agent-server/      # Web API (future)
+├── packages/
+│   ├── agent-core/               # Agent orchestrator
+│   │   ├── orchestrator.ts       # Main agent loop
+│   │   ├── planner.ts            # Planning Module
+│   │   ├── executor.ts           # Execution Module
+│   │   └── evaluator.ts          # Evaluation Module
+│   ├── agent-tools/              # Tool implementations
+│   │   ├── foundation/           # Foundation tools
+│   │   ├── calculation/          # Domain calculation tools
+│   │   ├── action/               # Domain action tools
+│   │   └── mcp/                  # MCP protocol extensions
+│   ├── agent-skills/             # Skills registry and executor
+│   ├── agent-cli/                # CLI interface
+│   └── agent-server/             # Web API (future)
 ├── config/
 │   └── agent.yaml                # Agent configuration
 └── docs/
@@ -741,118 +384,85 @@ corint-cognition/
 
 ---
 
-## 8. Configuration
+## 6. Non-Functional Requirements
 
-### Agent Configuration (`config/agent.yaml`)
-```yaml
-agent:
-  name: "CORINT Risk Agent"
-  version: "0.1.0"
-  
-  llm:
-    provider: openai
-    model: gpt-4-turbo
-    temperature: 0.3
-    max_tokens: 4000
-    
-  tools:
-    enabled:
-      - query_decision_results
-      - analyze_rule_performance
-      - detect_anomalies
-      - generate_rule
-      - generate_ruleset
-      - generate_feature
-      - test_rule
-      - backtest_strategy
-      - deploy_config
-      - query_features
-      - explore_schema
-      
-  workflows:
-    analysis_workflow:
-      steps:
-        - query_metrics
-        - identify_issues
-        - generate_insights
-    optimization_workflow:
-      steps:
-        - analyze_performance
-        - generate_variations
-        - backtest
-        - select_best
-        
-  decision_engine:
-    repository_path: "../corint-decision/repository"
-    database_url: "postgresql://localhost/corint"
-    
-  safety:
-    require_approval_for:
-      - deploy_config
-      - modify_production
-    dry_run_default: true
-```
+### 6.1 Reliability
+
+| Metric | Target | Measurement Method |
+|--------|--------|-------------------|
+| Result Acceptance Rate | ≥ 80% | 用户对生成结果的 👍/👎 反馈统计 |
+| Task Completion Rate | ≥ 95% | 任务状态跟踪（成功/失败/超时） |
+| First-time Success Rate | ≥ 70% | 无需用户修正即可使用的比例 |
+
+**Error Handling:**
+- Error Recovery: 遇到错误时优雅降级或提示用户干预
+- Timeout Handling: 长时间任务需要进度反馈，避免卡死假象（>10s 显示进度）
+- Operation Atomicity: 部署操作要么全部成功要么全部回滚
+- Retry Strategy: 可重试错误自动重试（最多 3 次，指数退避）
+
+### 6.2 Security
+- Authentication & Authorization (Role-based access control)
+- Audit logging (All operations logged)
+- Data privacy (Sensitive data anonymization)
+- No credential exposure in generated code
+
+### 6.3 Explainability
+- **Reasoning Trace**: 展示中间推理步骤和决策依据
+- **Data Provenance**: 标注数据来源（哪个表、哪个时间段）
+- **Confidence Score**: 对生成结果标注置信度（高/中/低）
+- **Alternative Options**: 低置信度时提供备选方案
+- **Query Preview**: 执行查询前展示 SQL/代码，允许用户确认
+
+### 6.4 Maintainability
+- **Skills Support**: 支持用户自定义 Skills（参考 Claude Skills）
+- **Plugin Architecture**: 工具和数据源可插拔扩展
+- **Configuration Management**: 支持多环境配置（dev/staging/prod）
+- **Logging & Debugging**: 详细的执行日志，支持问题排查
 
 ---
 
-## 9. Safety & Governance
+## 7. Success Metrics
 
-### Human-in-the-Loop Controls
-1. **Confirmation Required** for:
-   - Deploying configurations to production
-   - Modifying live rules/rulesets
-   - Deleting decision history
-   
-2. **Dry-run by Default**:
-   - All write operations default to dry-run mode
-   - Explicit `--execute` flag required for actual changes
-
-3. **Audit Logging**:
-   - All agent actions logged with timestamps
-   - Tool invocations and results recorded
-   - User confirmations tracked
-
-### Rate Limiting
-- Max 100 LLM calls per session
-- Max 10 concurrent tool executions
-- Backtest limited to 50K samples per run
-
----
-
-## 10. Success Metrics
-
-### Efficiency Metrics
+### 7.1 Efficiency Metrics
 - **Time to Insight**: Reduce analysis time from hours to minutes
 - **Iteration Speed**: Enable 10x faster rule optimization cycles
 - **Automation Rate**: Automate 70% of routine analysis tasks
 
-### Quality Metrics
+### 7.2 Quality Metrics
 - **Rule Quality**: Generated rules pass validation 95%+ of time
-- **Recommendation Accuracy**: 80%+ of optimization suggestions improve metrics
+- **Recommendation Acceptance Rate**: 80%+ of Agent suggestions accepted by users
 - **User Satisfaction**: NPS score > 50
 
-### Adoption Metrics
+### 7.3 Adoption Metrics
 - **Daily Active Users**: Target 80% of risk team
 - **Tasks Automated**: Track # of analyses, generations, deployments
-- **Collaboration**: Measure sharing of agent-generated insights
+- **Skills Usage**: Measure built-in vs custom Skills adoption
+
+### 7.4 Evaluation & Acceptance
+- **Offline Eval Set**: Curated tasks with expected outputs (rules, insights, metrics)
+- **Regression Gate**: Block releases that degrade acceptance or accuracy
+- **Human Review Loop**: Sampled outputs reviewed weekly with feedback labels
 
 ---
 
-## 11. Comparison: Risk Agent vs Other AI Agents
+## 8. Comparison: Risk Agent vs Other AI Agents
 
 | Feature | CORINT Risk Agent | Manus | Claude Code | Cursor |
 |---------|------------------|-------|-------------|--------|
 | **Domain** | Risk Management | General Purpose | Code Generation | Code Editing |
+| **Interface** | CLI + Web UI | Web UI | CLI | IDE Extension |
 | **DSL Generation** | CORINT RDL (YAML) | N/A | Multiple languages | Multiple languages |
 | **Data Analysis** | Built-in (SQL, metrics) | Limited | Limited | Limited |
 | **Backtesting** | Native support | N/A | N/A | N/A |
 | **Tool Ecosystem** | Risk-specific tools | General tools | Code tools | IDE tools |
 | **Production Deploy** | Integrated with engine | N/A | N/A | N/A |
 | **Explainability** | First-class (risk audit) | General | Code comments | Code suggestions |
+| **Skills Support** | Built-in + Custom | N/A | N/A | N/A |
+| **Target Users** | Risk analysts, engineers | Everyone | Developers | Developers |
 
 ---
 
-## 12. Future Enhancements
+## 9. Future Enhancements
 
 ### Short-term (3 months)
 - Multi-agent collaboration (analysis agent + generation agent)
@@ -870,13 +480,12 @@ agent:
 
 ## References
 
-1. Anthropic: Building Effective Agents - https://www.anthropic.com/engineering/building-effective-agents
-2. CORINT Decision Engine Architecture - `../corint-decision/docs/ARCHITECTURE.md`
-3. CORINT DSL Design - `../corint-decision/docs/DSL_DESIGN.md`
-4. CORINT LLM Guide - `../corint-decision/docs/LLM_GUIDE.md`
+
+1. CORINT Decision Engine Architecture - `../corint-decision/docs/ARCHITECTURE.md`
+2. CORINT DSL Design - `../corint-decision/docs/DSL_DESIGN.md` 
 
 ---
 
 **Document Version**: 1.0  
-**Last Updated**: 2025-01-11  
+**Last Updated**: 2026-01-12  
 **Status**: Design Phase
