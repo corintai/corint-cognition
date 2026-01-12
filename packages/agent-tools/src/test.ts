@@ -1,5 +1,5 @@
-import { Tool, ToolRegistry } from '@corint/agent-core';
-import { QuerySQLTool } from '@corint/agent-tools';
+import { ToolRegistry } from '../../agent-core/src/index.js';
+import { QuerySQLTool } from './foundation/query-sql.js';
 
 function testToolRegistry() {
   console.log('=== Testing Tool Registry ===\n');

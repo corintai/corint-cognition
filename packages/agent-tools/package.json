@@ -16,17 +16,23 @@
     "dev": "tsup --watch",
     "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist",
-    "test": "node --loader ts-node/esm src/test.ts"
+    "test": "tsx src/test.ts"
   },
   "dependencies": {
+    "@clickhouse/client": "^1.16.0",
     "@corint/agent-core": "*",
-    "pg": "^8.11.3",
+    "csv-parse": "^6.1.0",
+    "csv-stringify": "^6.6.0",
+    "fast-glob": "^3.3.3",
     "mysql2": "^3.9.0",
+    "pg": "^8.11.3",
+    "xlsx": "^0.18.5",
     "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/pg": "^8.11.0",
     "tsup": "^8.0.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.3.3"
   }
 }

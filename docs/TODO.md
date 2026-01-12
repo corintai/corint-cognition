@@ -72,21 +72,21 @@
 ## Phase 3: Foundation Tools (P0)
 
 ### 3.1 Data Access Tools
-- [ ] `query_sql` - SQL query execution
-  - [ ] PostgreSQL connector
-  - [ ] MySQL connector
-  - [ ] ClickHouse connector
-- [ ] `explore_schema` - Schema introspection
-- [ ] `call_api` - REST API client
+- [x] `query_sql` - SQL query execution
+  - [x] PostgreSQL connector
+  - [x] MySQL connector
+  - [x] ClickHouse connector
+- [x] `explore_schema` - Schema introspection
+- [x] `call_api` - REST API client
 
 ### 3.2 File Tools
-- [ ] `read_file` - File reading (text, binary, Excel, CSV)
-- [ ] `write_file` - File writing
-- [ ] `list_files` - Directory listing with glob patterns
+- [x] `read_file` - File reading (text, binary, Excel, CSV)
+- [x] `write_file` - File writing
+- [x] `list_files` - Directory listing with glob patterns
 
 ### 3.3 Code Execution Tools
-- [ ] `execute_code` - Python code execution in sandbox
-- [ ] `run_shell` - Shell command execution
+- [x] `execute_code` - Python code execution in sandbox
+- [x] `run_shell` - Shell command execution
 - [ ] Sandbox environment setup (Docker-based)
 
 ---

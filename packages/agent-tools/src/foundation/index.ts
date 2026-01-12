@@ -1,1 +1,8 @@
 export { QuerySQLTool } from './query-sql.js';
+export { ExploreSchemaTool } from './explore-schema.js';
+export { CallApiTool } from './call-api.js';
+export { ReadFileTool } from './read-file.js';
+export { WriteFileTool } from './write-file.js';
+export { ListFilesTool } from './list-files.js';
+export { ExecuteCodeTool } from './execute-code.js';
+export { RunShellTool } from './run-shell.js';
