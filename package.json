@@ -1,0 +1,45 @@
+{
+  "name": "corint-cognition",
+  "version": "1.0.0",
+  "description": "CORINT Risk Agent - AI-native assistant for risk management",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.2.4",
+    "tsup": "^8.0.1",
+    "turbo": "^1.12.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github2:corintai/corint-cognition.git"
+  },
+  "keywords": [
+    "ai-agent",
+    "risk-management",
+    "credit-risk",
+    "fraud-detection",
+    "decision-engine"
+  ],
+  "author": "CORINT AI",
+  "license": "MIT"
+}
