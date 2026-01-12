@@ -81,9 +81,19 @@ function buildClient(options: AgentRuntimeOptions): LLMClient {
 }
 
 function resolveProvider(input?: string): 'openai' | 'anthropic' | 'deepseek' {
-  const normalized = input || process.env.CORINT_PROVIDER || '';
+  const normalized =
+    input ||
+    process.env.DEFAULT_LLM_PROVIDER 
+    '';
   if (normalized) {
-    return normalized.toLowerCase() as 'openai' | 'anthropic' | 'deepseek';
+    const value = normalized.toLowerCase();
+    if (value.includes('deepseek')) {
+      return 'deepseek';
+    }
+    if (value.includes('anthropic') || value.includes('claude')) {
+      return 'anthropic';
+    }
+    return 'openai';
   }
   if (process.env.OPENAI_API_KEY) {
     return 'openai';
@@ -103,8 +113,16 @@ function resolveModelAndTemp(
 ): { model: string; temperature?: number } {
   const envModel = process.env.CORINT_MODEL;
   const envTemp = process.env.CORINT_TEMPERATURE;
+  const providerPrefix = providerName.toUpperCase();
+  const providerModel = process.env[`${providerPrefix}_MODEL`];
+  const providerTemp = process.env[`${providerPrefix}_TEMPERATURE`];
   const parsedEnvTemp = envTemp ? Number(envTemp) : undefined;
-  const envTemperature = Number.isFinite(parsedEnvTemp) ? parsedEnvTemp : undefined;
+  const parsedProviderTemp = providerTemp ? Number(providerTemp) : undefined;
+  const envTemperature = Number.isFinite(parsedEnvTemp)
+    ? parsedEnvTemp
+    : Number.isFinite(parsedProviderTemp)
+      ? parsedProviderTemp
+      : undefined;
 
   const modelDefaults: Record<string, string> = {
     openai: 'gpt-4-turbo',
@@ -113,7 +131,7 @@ function resolveModelAndTemp(
   };
 
   return {
-    model: options.model || envModel || modelDefaults[providerName],
+    model: options.model || envModel || providerModel || modelDefaults[providerName],
     temperature: options.temperature ?? envTemperature,
   };
 }
