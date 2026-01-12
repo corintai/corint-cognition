@@ -1,7 +1,7 @@
 import type { LLMClient } from './llm-client.js';
 import type { ToolRegistry } from './tool.js';
 import type { Task, Plan, SessionContext } from './agent-types.js';
-import type { LLMResponse, LLMToolCall } from './types.js';
+import type { LLMMessage, LLMResponse, LLMToolCall } from './types.js';
 
 export interface ExecutionResult {
   success: boolean;
@@ -17,6 +17,7 @@ export class Executor {
   private llmClient: LLMClient;
   private toolRegistry: ToolRegistry;
   private maxRetries = 3;
+  private maxToolIterations = 5;
 
   constructor(llmClient: LLMClient, toolRegistry: ToolRegistry) {
     this.llmClient = llmClient;
@@ -78,7 +79,7 @@ export class Executor {
     const tools = this.toolRegistry.getOpenAITools();
     const toolConfig = tools.length > 0 ? { tools } : {};
 
-    const messages = [
+    let messages: LLMMessage[] = [
       { role: 'system' as const, content: this.getSystemPrompt() },
       ...context.conversationHistory.map(msg => ({
         role: msg.role as 'user' | 'assistant' | 'system',
@@ -87,18 +88,27 @@ export class Executor {
       { role: 'user' as const, content: userMessage },
     ];
 
-    const response = await this.llmClient.complete(messages, toolConfig);
-    const responseUsage = response.usage;
+    let response = await this.llmClient.complete(messages, toolConfig);
+    let mergedUsage = response.usage;
+    const toolCalls: LLMToolCall[] = [];
+    const toolResults: Array<{ toolCallId: string; result: unknown; error?: string }> = [];
 
-    if (response.tool_calls && response.tool_calls.length > 0) {
-      const toolResults = await this.executeToolCalls(response.tool_calls, context);
-      const toolMessages = toolResults.map(result => ({
+    for (let iteration = 0; iteration < this.maxToolIterations; iteration++) {
+      if (!response.tool_calls || response.tool_calls.length === 0) {
+        break;
+      }
+
+      toolCalls.push(...response.tool_calls);
+      const results = await this.executeToolCalls(response.tool_calls, context);
+      toolResults.push(...results);
+
+      const toolMessages = results.map(result => ({
         role: 'tool' as const,
         content: JSON.stringify(result.error ? { error: result.error } : result.result),
         tool_call_id: result.toolCallId,
       }));
 
-      const followUpMessages = [
+      messages = [
         ...messages,
         {
           role: 'assistant' as const,
@@ -108,24 +118,17 @@ export class Executor {
         ...toolMessages,
       ];
 
-      const followUpResponse = await this.llmClient.complete(followUpMessages, toolConfig);
-      const mergedUsage = this.mergeUsage(responseUsage, followUpResponse.usage);
-
-      return {
-        success: true,
-        output: followUpResponse.content ?? '',
-        tokensUsed: mergedUsage?.total_tokens ?? followUpResponse.usage?.total_tokens,
-        usage: mergedUsage ?? followUpResponse.usage,
-        toolCalls: response.tool_calls,
-        toolResults,
-      };
+      response = await this.llmClient.complete(messages, toolConfig);
+      mergedUsage = this.mergeUsage(mergedUsage, response.usage);
     }
 
     return {
       success: true,
       output: response.content,
-      tokensUsed: response.usage?.total_tokens,
-      usage: response.usage,
+      tokensUsed: mergedUsage?.total_tokens ?? response.usage?.total_tokens,
+      usage: mergedUsage ?? response.usage,
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      toolResults: toolResults.length > 0 ? toolResults : undefined,
     };
   }
 
@@ -222,6 +225,7 @@ Provide a detailed result.`;
   private getSystemPrompt(): string {
     return `You are a risk management assistant specialized in analyzing data, generating strategies, and optimizing rules.
 You have access to various tools to query databases, analyze metrics, and validate configurations.
+If a required data source is unknown, call list_data_sources and ask the user to choose or configure one.
 Always provide clear, actionable results.`;
   }
 

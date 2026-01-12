@@ -1,7 +1,10 @@
+import fs from 'fs';
+import path from 'path';
 import { Pool } from 'pg';
 import * as mysql from 'mysql2/promise';
 import { createClient } from '@clickhouse/client';
 import type { ClickHouseClient } from '@clickhouse/client';
+import yaml from 'yaml';
 
 export type DataSourceType = 'postgres' | 'mysql' | 'clickhouse';
 
@@ -14,6 +17,7 @@ export interface DataSourceConfig {
   password?: string;
   database?: string;
   ssl?: boolean;
+  maxConnections?: number;
 }
 
 export type DataSourceClient =
@@ -22,9 +26,27 @@ export type DataSourceClient =
   | { type: 'clickhouse'; client: ClickHouseClient; config: DataSourceConfig };
 
 const dataSourceCache = new Map<string, DataSourceClient>();
+let yamlCache:
+  | {
+      path: string;
+      mtimeMs: number;
+      configs: Record<string, DataSourceConfig>;
+      summaries: DataSourceSummary[];
+    }
+  | undefined;
+
+export interface DataSourceSummary {
+  name: string;
+  type: DataSourceType;
+}
 
 export function getDataSourceConfig(name: string): DataSourceConfig {
   const normalized = normalizeName(name);
+
+  const fromYaml = parseYamlDataSource(name);
+  if (fromYaml) {
+    return fromYaml;
+  }
 
   const fromEnvJson = parseDataSourcesEnv(name);
   if (fromEnvJson) {
@@ -36,8 +58,14 @@ export function getDataSourceConfig(name: string): DataSourceConfig {
     return fromPrefix;
   }
 
+  const knownSources = listDataSources();
+  const hint =
+    knownSources.length > 0
+      ? ` Known sources: ${knownSources.map(source => source.name).join(', ')}.`
+      : '';
+
   throw new Error(
-    `Data source ${name} not configured. Set CORINT_DATA_SOURCES or CORINT_DS_${normalized}_TYPE.`,
+    `Data source ${name} not configured. Set repository/datasource.yaml, CORINT_DATA_SOURCES, or CORINT_DS_${normalized}_TYPE.${hint}`,
   );
 }
 
@@ -80,6 +108,169 @@ export async function getDataSourceClient(name: string): Promise<DataSourceClien
   return client;
 }
 
+export function listDataSources(): DataSourceSummary[] {
+  const summaries: DataSourceSummary[] = [];
+  const seen = new Set<string>();
+
+  const fromYaml = parseYamlDataSourcesAll();
+  for (const source of fromYaml) {
+    if (seen.has(source.name)) {
+      continue;
+    }
+    seen.add(source.name);
+    summaries.push(source);
+  }
+
+  const fromEnvJson = parseDataSourcesEnvAll();
+  for (const source of fromEnvJson) {
+    if (seen.has(source.name)) {
+      continue;
+    }
+    seen.add(source.name);
+    summaries.push(source);
+  }
+
+  const fromPrefix = parseEnvPrefixAll();
+  for (const source of fromPrefix) {
+    if (seen.has(source.name)) {
+      continue;
+    }
+    seen.add(source.name);
+    summaries.push(source);
+  }
+
+  return summaries;
+}
+
+function parseYamlDataSource(name: string): DataSourceConfig | undefined {
+  const data = loadYamlSources();
+  if (!data) {
+    return undefined;
+  }
+  const key = name.toLowerCase();
+  return data.configs[key];
+}
+
+function parseYamlDataSourcesAll(): DataSourceSummary[] {
+  const data = loadYamlSources();
+  return data ? data.summaries : [];
+}
+
+function loadYamlSources():
+  | {
+      configs: Record<string, DataSourceConfig>;
+      summaries: DataSourceSummary[];
+    }
+  | undefined {
+  const configPath = resolveYamlPath();
+  if (!configPath) {
+    return undefined;
+  }
+
+  const stat = fs.statSync(configPath);
+  if (yamlCache && yamlCache.path === configPath && yamlCache.mtimeMs === stat.mtimeMs) {
+    return { configs: yamlCache.configs, summaries: yamlCache.summaries };
+  }
+
+  const raw = fs.readFileSync(configPath, 'utf8');
+  const parsed = yaml.parse(raw) as unknown;
+  const { configs, summaries } = normalizeYamlSources(parsed);
+
+  yamlCache = {
+    path: configPath,
+    mtimeMs: stat.mtimeMs,
+    configs,
+    summaries,
+  };
+
+  return { configs, summaries };
+}
+
+function resolveYamlPath(): string | undefined {
+  const envPath = process.env.CORINT_DATASOURCE_PATH;
+  if (envPath) {
+    const resolved = path.resolve(envPath);
+    if (fs.existsSync(resolved)) {
+      return resolved;
+    }
+  }
+
+  return findUpwardsConfig(process.cwd());
+}
+
+function findUpwardsConfig(startDir: string): string | undefined {
+  let current = startDir;
+  while (true) {
+    const candidate = path.join(current, 'repository', 'datasource.yaml');
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return undefined;
+    }
+    current = parent;
+  }
+}
+
+function normalizeYamlSources(parsed: unknown): {
+  configs: Record<string, DataSourceConfig>;
+  summaries: DataSourceSummary[];
+} {
+  let sourceBlock = parsed;
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    const root = parsed as Record<string, unknown>;
+    if (root.datasource) {
+      sourceBlock = root.datasource;
+    } else if (root.data_sources) {
+      sourceBlock = root.data_sources;
+    } else if (root.datasources) {
+      sourceBlock = root.datasources;
+    }
+  }
+
+  const configs: Record<string, DataSourceConfig> = {};
+  const summaries: DataSourceSummary[] = [];
+
+  if (Array.isArray(sourceBlock)) {
+    for (const entry of sourceBlock) {
+      if (!entry || typeof entry !== 'object') {
+        continue;
+      }
+      const name = String((entry as { name?: string }).name || '').trim();
+      if (!name) {
+        continue;
+      }
+      const config = normalizeConfig(entry as Record<string, unknown>);
+      if (!config.type) {
+        continue;
+      }
+      const key = name.toLowerCase();
+      if (!configs[key]) {
+        configs[key] = config;
+        summaries.push({ name, type: config.type });
+      }
+    }
+  } else if (sourceBlock && typeof sourceBlock === 'object') {
+    for (const [name, value] of Object.entries(sourceBlock as Record<string, unknown>)) {
+      if (!value || typeof value !== 'object') {
+        continue;
+      }
+      const config = normalizeConfig(value as Record<string, unknown>);
+      if (!config.type) {
+        continue;
+      }
+      const key = name.toLowerCase();
+      if (!configs[key]) {
+        configs[key] = config;
+        summaries.push({ name, type: config.type });
+      }
+    }
+  }
+
+  return { configs, summaries };
+}
+
 function parseDataSourcesEnv(name: string): DataSourceConfig | undefined {
   const raw = process.env.CORINT_DATA_SOURCES;
   if (!raw) {
@@ -103,9 +294,42 @@ function parseDataSourcesEnv(name: string): DataSourceConfig | undefined {
   return undefined;
 }
 
+function parseDataSourcesEnvAll(): DataSourceSummary[] {
+  const raw = process.env.CORINT_DATA_SOURCES;
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed
+        .filter(entry => entry && typeof entry === 'object')
+        .map(entry => ({
+          name: String((entry as { name?: string }).name || ''),
+          type: resolveProviderType(entry as Record<string, unknown>),
+        }))
+        .filter(entry => entry.name && entry.type);
+    }
+    if (parsed && typeof parsed === 'object') {
+      return Object.entries(parsed as Record<string, unknown>)
+        .map(([name, value]) => ({
+          name,
+          type: resolveProviderType(value as Record<string, unknown>),
+        }))
+        .filter(entry => entry.name && entry.type);
+    }
+  } catch (error) {
+    console.error('Failed to parse CORINT_DATA_SOURCES:', error);
+  }
+
+  return [];
+}
+
 function parseEnvPrefix(normalizedName: string): DataSourceConfig | undefined {
   const prefix = `CORINT_DS_${normalizedName}_`;
-  const type = process.env[`${prefix}TYPE`] as DataSourceType | undefined;
+  const typeRaw = process.env[`${prefix}TYPE`];
+  const type = typeRaw ? (String(typeRaw).toLowerCase() as DataSourceType) : undefined;
   if (!type) {
     return undefined;
   }
@@ -119,21 +343,49 @@ function parseEnvPrefix(normalizedName: string): DataSourceConfig | undefined {
     password: process.env[`${prefix}PASSWORD`],
     database: process.env[`${prefix}DATABASE`] || process.env[`${prefix}DB`],
     ssl: parseBoolean(process.env[`${prefix}SSL`]),
+    maxConnections: parseNumber(process.env[`${prefix}MAX_CONNECTIONS`]),
   };
 
   return config;
 }
 
+function parseEnvPrefixAll(): DataSourceSummary[] {
+  const summaries: DataSourceSummary[] = [];
+
+  for (const key of Object.keys(process.env)) {
+    if (!key.startsWith('CORINT_DS_') || !key.endsWith('_TYPE')) {
+      continue;
+    }
+    const namePart = key.slice('CORINT_DS_'.length, -'_TYPE'.length);
+    const typeRaw = process.env[key];
+    const type = typeRaw ? (String(typeRaw).toLowerCase() as DataSourceType) : undefined;
+    if (!type) {
+      continue;
+    }
+    summaries.push({
+      name: denormalizeName(namePart),
+      type,
+    });
+  }
+
+  return summaries;
+}
+
 function normalizeConfig(input: Record<string, unknown>): DataSourceConfig {
   return {
-    type: String(input.type) as DataSourceType,
-    url: asString(input.url),
+    type: resolveProviderType(input),
+    url: asString(input.url) || asString(input.connection_string) || asString(input.connectionString),
     host: asString(input.host),
     port: asNumber(input.port),
     user: asString(input.user),
     password: asString(input.password),
     database: asString(input.database),
     ssl: asBoolean(input.ssl),
+    maxConnections: asNumber(
+      extractOption(input.options, 'max_connections') ??
+        extractOption(input.options, 'maxConnections') ??
+        input.max_connections,
+    ),
   };
 }
 
@@ -145,6 +397,7 @@ function buildPostgresConfig(config: DataSourceConfig): {
   password?: string;
   database?: string;
   ssl?: { rejectUnauthorized: boolean } | undefined;
+  max?: number;
 } {
   return {
     connectionString: config.url,
@@ -154,6 +407,7 @@ function buildPostgresConfig(config: DataSourceConfig): {
     password: config.password,
     database: config.database,
     ssl: config.ssl ? { rejectUnauthorized: false } : undefined,
+    max: config.maxConnections,
   };
 }
 
@@ -165,6 +419,7 @@ function buildMySQLConfig(config: DataSourceConfig): {
   password?: string;
   database?: string;
   ssl?: Record<string, unknown>;
+  connectionLimit?: number;
   waitForConnections: boolean;
 } {
   return {
@@ -175,6 +430,7 @@ function buildMySQLConfig(config: DataSourceConfig): {
     password: config.password,
     database: config.database,
     ssl: config.ssl ? {} : undefined,
+    connectionLimit: config.maxConnections,
     waitForConnections: true,
   };
 }
@@ -203,6 +459,10 @@ function normalizeName(name: string): string {
   return name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
 }
 
+function denormalizeName(name: string): string {
+  return name.toLowerCase();
+}
+
 function parseNumber(value: string | undefined): number | undefined {
   if (!value) {
     return undefined;
@@ -225,13 +485,59 @@ function parseBoolean(value: string | undefined): boolean | undefined {
 }
 
 function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
+  return typeof value === 'string' ? expandEnvString(value) : undefined;
 }
 
 function asNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
 }
 
 function asBoolean(value: unknown): boolean | undefined {
-  return typeof value === 'boolean' ? value : undefined;
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    if (value.toLowerCase() === 'true') {
+      return true;
+    }
+    if (value.toLowerCase() === 'false') {
+      return false;
+    }
+  }
+  return undefined;
+}
+
+function expandEnvString(value: string): string {
+  return value.replace(/\$\{([A-Z0-9_]+)\}/g, (match, name) => {
+    const envValue = process.env[name];
+    return envValue !== undefined ? envValue : match;
+  });
+}
+
+function resolveProviderType(input: Record<string, unknown>): DataSourceType {
+  const raw = String(input.type || input.provider || '').toLowerCase();
+  if (raw === 'postgresql' || raw === 'postgres') {
+    return 'postgres';
+  }
+  if (raw === 'mysql') {
+    return 'mysql';
+  }
+  if (raw === 'clickhouse') {
+    return 'clickhouse';
+  }
+  return raw as DataSourceType;
+}
+
+function extractOption(options: unknown, key: string): unknown {
+  if (!options || typeof options !== 'object') {
+    return undefined;
+  }
+  return (options as Record<string, unknown>)[key];
 }

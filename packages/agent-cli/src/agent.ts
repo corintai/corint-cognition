@@ -18,6 +18,7 @@ import {
   ListFilesTool,
   ExecuteCodeTool,
   RunShellTool,
+  ListDataSourcesTool,
 } from '@corint/agent-tools';
 import type { CliReporter } from './reporter.js';
 
@@ -152,6 +153,7 @@ function buildToolRegistry(
     new ListFilesTool(),
     new ExecuteCodeTool(),
     new RunShellTool(),
+    new ListDataSourcesTool(),
   ];
 
   for (const tool of tools) {
@@ -215,6 +217,9 @@ function shouldConfirmTool(name: string, input: unknown): boolean {
     }
     const statement = sql.trim().split(/\s+/)[0]?.toLowerCase();
     return ['insert', 'update', 'delete', 'alter', 'drop', 'truncate'].includes(statement);
+  }
+  if (name === 'list_data_sources') {
+    return false;
   }
   return false;
 }

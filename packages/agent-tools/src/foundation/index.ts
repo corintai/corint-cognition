@@ -6,3 +6,4 @@ export { WriteFileTool } from './write-file.js';
 export { ListFilesTool } from './list-files.js';
 export { ExecuteCodeTool } from './execute-code.js';
 export { RunShellTool } from './run-shell.js';
+export { ListDataSourcesTool } from './list-data-sources.js';
