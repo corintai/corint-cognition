@@ -15,7 +15,8 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "lint": "eslint src --ext .ts",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "node --loader ts-node/esm src/test.ts"
   },
   "dependencies": {
     "@corint/agent-core": "*",

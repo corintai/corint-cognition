@@ -15,11 +15,13 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "lint": "eslint src --ext .ts",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "node --loader ts-node/esm src/test.ts"
   },
   "dependencies": {
     "openai": "^4.24.1",
     "@anthropic-ai/sdk": "^0.14.0",
+    "@google/generative-ai": "^0.21.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
