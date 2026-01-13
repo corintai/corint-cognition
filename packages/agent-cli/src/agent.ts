@@ -41,10 +41,11 @@ export function createAgent(
 ): Orchestrator {
   const client = buildClient(options);
   const registry = buildToolRegistry(options, reporter, confirm);
+  const envTimeout = process.env.CORINT_TIMEOUT ? Number(process.env.CORINT_TIMEOUT) : undefined;
   const config: AgentConfig = {
     maxTokens: options.maxTokens,
     maxQueries: options.maxQueries,
-    timeout: options.timeout,
+    timeout: options.timeout ?? (Number.isFinite(envTimeout) ? envTimeout : 0),
   };
 
   return new Orchestrator(client, registry, config);

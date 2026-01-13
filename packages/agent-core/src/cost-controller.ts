@@ -19,9 +19,9 @@ export class CostController {
 
   constructor(limits: Partial<CostLimits> = {}) {
     this.limits = {
-      maxTokens: limits.maxTokens || 100000,
-      maxQueries: limits.maxQueries || 50,
-      timeout: limits.timeout || 3600000,
+      maxTokens: limits.maxTokens ?? 100000,
+      maxQueries: limits.maxQueries ?? 50,
+      timeout: limits.timeout ?? 3600000,
     };
   }
 
@@ -73,12 +73,14 @@ export class CostController {
       };
     }
 
-    const elapsed = Date.now() - metrics.startTime;
-    if (elapsed >= this.limits.timeout) {
-      return {
-        allowed: false,
-        reason: `Timeout exceeded: ${elapsed}ms/${this.limits.timeout}ms`,
-      };
+    if (this.limits.timeout > 0) {
+      const elapsed = Date.now() - metrics.startTime;
+      if (elapsed >= this.limits.timeout) {
+        return {
+          allowed: false,
+          reason: `Timeout exceeded: ${elapsed}ms/${this.limits.timeout}ms`,
+        };
+      }
     }
 
     return { allowed: true };
