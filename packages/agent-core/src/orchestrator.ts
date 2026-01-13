@@ -72,17 +72,38 @@ export class Orchestrator {
       return;
     }
 
-    yield { type: 'status', content: 'Processing message...' };
-
     this.contextManager.addMessage(sessionId, 'user', userMessage);
 
     try {
-      yield { type: 'status', content: 'Thinking...' };
-      const response = await this.handleMessage(sessionId, userMessage, context);
-      yield { type: 'response', content: response.content };
+      let fullContent = '';
+      const stream = this.executor.executeWithToolsStream(userMessage, context);
+
+      while (true) {
+        const { value, done } = await stream.next();
+        if (done) {
+          const result = value;
+          if (result) {
+            this.recordTokenUsage(sessionId, result.usage);
+            fullContent = typeof result.output === 'string' ? result.output : fullContent;
+          }
+          break;
+        }
+
+        if (value.type === 'text') {
+          fullContent += value.content;
+          yield { type: 'text', content: value.content };
+        } else if (value.type === 'tool_start') {
+          yield { type: 'status', content: `Calling ${value.toolName}...` };
+        } else if (value.type === 'tool_end') {
+          yield { type: 'status', content: `${value.toolName}: ${value.content}` };
+        }
+      }
+
+      this.contextManager.addMessage(sessionId, 'assistant', fullContent);
+      yield { type: 'done', content: '' };
     } catch (error) {
       yield {
-        type: 'response',
+        type: 'error',
         content: `Error: ${(error as Error).message}`,
       };
     }

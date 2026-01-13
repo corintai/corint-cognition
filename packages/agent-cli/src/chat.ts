@@ -147,9 +147,17 @@ async function runMessage(
   message: string,
 ): Promise<void> {
   try {
+    let buffer = '';
     for await (const chunk of orchestrator.processMessageStream(sessionId, message)) {
       if (chunk.type === 'status') {
         reporter.status(chunk.content);
+      } else if (chunk.type === 'text') {
+        buffer += chunk.content;
+        reporter.streamText(chunk.content);
+      } else if (chunk.type === 'done') {
+        reporter.flushStream();
+      } else if (chunk.type === 'error') {
+        reporter.error(chunk.content);
       } else if (chunk.type === 'response') {
         reporter.response(chunk.content);
       } else {

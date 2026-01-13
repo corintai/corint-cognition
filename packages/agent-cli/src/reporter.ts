@@ -9,6 +9,8 @@ export interface ReporterOptions {
 export interface ReporterOutput {
   writeLine(line: string): void;
   setStatus(message: string | null): void;
+  writeText?(text: string): void;
+  flushStream?(): void;
 }
 
 export interface BannerInfo {
@@ -25,6 +27,8 @@ export class CliReporter {
   private currentStatus: string | null = null;
   private useSpinner: boolean;
   private output?: ReporterOutput;
+  private streamBuffer = '';
+  private isStreaming = false;
 
   constructor(options: ReporterOptions = {}) {
     this.output = options.output;
@@ -113,6 +117,33 @@ export class CliReporter {
     }
     this.writeLine(chalk.white(trimmed));
     this.writeLine('');
+  }
+
+  streamText(text: string): void {
+    if (!this.isStreaming) {
+      this.clearStatus();
+      this.isStreaming = true;
+    }
+    this.streamBuffer += text;
+    if (this.output?.writeText) {
+      this.output.writeText(text);
+    } else {
+      process.stdout.write(chalk.white(text));
+    }
+  }
+
+  flushStream(): void {
+    if (this.isStreaming) {
+      if (this.output?.flushStream) {
+        this.output.flushStream();
+      } else if (!this.output?.writeText) {
+        process.stdout.write('\n\n');
+      } else {
+        this.output.writeLine('');
+      }
+      this.streamBuffer = '';
+      this.isStreaming = false;
+    }
   }
 
   toolCall(name: string, args: unknown): void {

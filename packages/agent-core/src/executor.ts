@@ -151,6 +151,131 @@ export class Executor {
     };
   }
 
+  async *executeWithToolsStream(
+    userMessage: string,
+    context: SessionContext,
+  ): AsyncGenerator<{ type: 'text' | 'tool_start' | 'tool_end' | 'status'; content: string; toolName?: string }, ExecutionResult, unknown> {
+    const tools = this.toolRegistry.getOpenAITools();
+    const toolConfig = tools.length > 0 ? { tools } : {};
+
+    let messages: LLMMessage[] = [
+      { role: 'system' as const, content: this.getSystemPrompt() },
+      ...context.conversationHistory.map(msg => ({
+        role: msg.role as 'user' | 'assistant' | 'system',
+        content: msg.content,
+      })),
+      { role: 'user' as const, content: userMessage },
+    ];
+
+    let fullContent = '';
+    let currentToolCalls: LLMToolCall[] = [];
+    let mergedUsage: LLMResponse['usage'] | undefined;
+    const allToolCalls: LLMToolCall[] = [];
+    const allToolResults: Array<{ toolCallId: string; result: unknown; error?: string }> = [];
+
+    for (let iteration = 0; iteration < this.maxToolIterations; iteration++) {
+      fullContent = '';
+      currentToolCalls = [];
+      const toolCallBuffers = new Map<number, { id: string; name: string; arguments: string }>();
+
+      for await (const chunk of this.llmClient.stream(messages, toolConfig)) {
+        if (chunk.content) {
+          fullContent += chunk.content;
+          yield { type: 'text', content: chunk.content };
+        }
+
+        if (chunk.tool_calls) {
+          for (const tc of chunk.tool_calls) {
+            const index = chunk.tool_calls.indexOf(tc);
+            let buffer = toolCallBuffers.get(index);
+            if (!buffer) {
+              buffer = { id: tc.id || '', name: '', arguments: '' };
+              toolCallBuffers.set(index, buffer);
+            }
+            if (tc.id) buffer.id = tc.id;
+            if (tc.function?.name) buffer.name += tc.function.name;
+            if (tc.function?.arguments) buffer.arguments += tc.function.arguments;
+          }
+        }
+      }
+
+      for (const [, buffer] of toolCallBuffers) {
+        if (buffer.id && buffer.name) {
+          currentToolCalls.push({
+            id: buffer.id,
+            type: 'function',
+            function: { name: buffer.name, arguments: buffer.arguments },
+          });
+        }
+      }
+
+      if (currentToolCalls.length === 0) {
+        break;
+      }
+
+      allToolCalls.push(...currentToolCalls);
+
+      for (const toolCall of currentToolCalls) {
+        yield { type: 'tool_start', content: toolCall.function.name, toolName: toolCall.function.name };
+      }
+
+      const results = await this.executeToolCalls(currentToolCalls, context);
+      allToolResults.push(...results);
+
+      for (const result of results) {
+        const toolCall = currentToolCalls.find(tc => tc.id === result.toolCallId);
+        yield {
+          type: 'tool_end',
+          content: result.error ? `Error: ${result.error}` : 'Done',
+          toolName: toolCall?.function.name,
+        };
+      }
+
+      const toolMessages = results.map(result => ({
+        role: 'tool' as const,
+        content: this.formatToolContent(result.error ? { error: result.error } : result.result),
+        tool_call_id: result.toolCallId,
+      }));
+
+      messages = [
+        ...messages,
+        {
+          role: 'assistant' as const,
+          content: fullContent,
+          tool_calls: currentToolCalls,
+        },
+        ...toolMessages,
+      ];
+    }
+
+    if (currentToolCalls.length > 0) {
+      messages = [
+        ...messages,
+        {
+          role: 'system' as const,
+          content: 'Provide a final response now without calling tools.',
+        },
+      ];
+
+      fullContent = '';
+      for await (const chunk of this.llmClient.stream(messages, {})) {
+        if (chunk.content) {
+          fullContent += chunk.content;
+          yield { type: 'text', content: chunk.content };
+        }
+      }
+    }
+
+    return {
+      success: true,
+      output: fullContent,
+      tokensUsed: mergedUsage?.total_tokens,
+      usage: mergedUsage,
+      toolCalls: allToolCalls.length > 0 ? allToolCalls : undefined,
+      toolResults: allToolResults.length > 0 ? allToolResults : undefined,
+    };
+  }
+
   private async executeWithRetry(task: Task, context: SessionContext): Promise<ExecutionResult> {
     let lastError: Error | undefined;
 
