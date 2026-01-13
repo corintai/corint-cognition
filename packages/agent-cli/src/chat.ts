@@ -1,6 +1,6 @@
 import inquirer from 'inquirer';
 import chalk from 'chalk';
-import { createAgent, type AgentRuntimeOptions, type ConfirmFn } from './agent.js';
+import { createAgent, getRuntimeInfo, type AgentRuntimeOptions, type ConfirmFn } from './agent.js';
 import { CliReporter } from './reporter.js';
 import { SessionStore, type SessionState, type SessionCheckpoint } from './session-store.js';
 import type { SessionContext } from '@corint/agent-core';
@@ -12,7 +12,7 @@ export interface ChatOptions extends AgentRuntimeOptions {
 }
 
 export async function runChat(options: ChatOptions): Promise<void> {
-  const reporter = new CliReporter();
+  const reporter = new CliReporter({ useSpinner: process.stdout.isTTY });
   const confirm = createConfirm(options, reporter);
   const orchestrator = createAgent(
     { ...options, autoApprove: options.yes || !process.stdin.isTTY },
@@ -25,7 +25,14 @@ export async function runChat(options: ChatOptions): Promise<void> {
   let context = ensureSession(orchestrator, activeSessionId, options.userId);
   let state = await loadSessionState(store, activeSessionId, context);
 
-  reporter.success(`Session: ${activeSessionId}`);
+  const runtimeInfo = getRuntimeInfo(options);
+  reporter.banner({
+    mode: 'chat',
+    provider: runtimeInfo.provider,
+    model: runtimeInfo.model,
+    temperature: runtimeInfo.temperature,
+    sessionId: activeSessionId,
+  });
   reporter.info('Type /help for commands.');
 
   while (true) {
@@ -79,7 +86,7 @@ export async function runChat(options: ChatOptions): Promise<void> {
 }
 
 export async function runOnce(prompt: string, options: ChatOptions): Promise<void> {
-  const reporter = new CliReporter();
+  const reporter = new CliReporter({ useSpinner: process.stdout.isTTY });
   const confirm = createConfirm(options, reporter);
   const orchestrator = createAgent(
     { ...options, autoApprove: options.yes || !process.stdin.isTTY },
@@ -90,6 +97,14 @@ export async function runOnce(prompt: string, options: ChatOptions): Promise<voi
 
   const sessionId = await resolveSessionId(options, store);
   const context = ensureSession(orchestrator, sessionId, options.userId);
+  const runtimeInfo = getRuntimeInfo(options);
+  reporter.banner({
+    mode: 'run',
+    provider: runtimeInfo.provider,
+    model: runtimeInfo.model,
+    temperature: runtimeInfo.temperature,
+    sessionId,
+  });
   let state = await loadSessionState(store, sessionId, context);
 
   const checkpoint = store.createCheckpoint(context);

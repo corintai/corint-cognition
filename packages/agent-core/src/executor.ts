@@ -18,6 +18,7 @@ export class Executor {
   private toolRegistry: ToolRegistry;
   private maxRetries = 3;
   private maxToolIterations = 5;
+  private maxToolOutputChars = 8000;
 
   constructor(llmClient: LLMClient, toolRegistry: ToolRegistry) {
     this.llmClient = llmClient;
@@ -104,7 +105,7 @@ export class Executor {
 
       const toolMessages = results.map(result => ({
         role: 'tool' as const,
-        content: JSON.stringify(result.error ? { error: result.error } : result.result),
+        content: this.formatToolContent(result.error ? { error: result.error } : result.result),
         tool_call_id: result.toolCallId,
       }));
 
@@ -224,9 +225,10 @@ Provide a detailed result.`;
 
   private getSystemPrompt(): string {
     return `You are a risk management assistant specialized in analyzing data, generating strategies, and optimizing rules.
-You have access to various tools to query databases, analyze metrics, and validate configurations.
-If a required data source is unknown, call list_data_sources and ask the user to choose or configure one.
-Always provide clear, actionable results.`;
+You have access to tools to query data sources, analyze metrics, and validate configurations.
+Decide when to use tools based on what is needed to answer accurately or take action.
+If required details are missing (such as which data source to use), ask a clarifying question or list available sources.
+Provide clear, actionable results and keep responses concise when tools are unnecessary.`;
   }
 
   private delay(ms: number): Promise<void> {
@@ -249,5 +251,25 @@ Always provide clear, actionable results.`;
       completion_tokens: (first?.completion_tokens || 0) + (second?.completion_tokens || 0),
       total_tokens: (first?.total_tokens || 0) + (second?.total_tokens || 0),
     };
+  }
+
+  private formatToolContent(payload: unknown): string {
+    const json = this.safeStringify(payload);
+    if (json.length <= this.maxToolOutputChars) {
+      return json;
+    }
+    return JSON.stringify({
+      truncated: true,
+      preview: json.slice(0, this.maxToolOutputChars),
+      total_chars: json.length,
+    });
+  }
+
+  private safeStringify(payload: unknown): string {
+    try {
+      return JSON.stringify(payload, null, 2);
+    } catch (error) {
+      return JSON.stringify({ error: 'Failed to serialize tool result', detail: String(error) });
+    }
   }
 }

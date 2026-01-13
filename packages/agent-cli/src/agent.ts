@@ -51,6 +51,16 @@ export function createAgent(
   return new Orchestrator(client, registry, config);
 }
 
+export function getRuntimeInfo(options: AgentRuntimeOptions): {
+  provider: string;
+  model: string;
+  temperature?: number;
+} {
+  const provider = resolveProvider(options.provider);
+  const { model, temperature } = resolveModelAndTemp(provider, options);
+  return { provider, model, temperature };
+}
+
 function buildClient(options: AgentRuntimeOptions): LLMClient {
   const providerName = resolveProvider(options.provider);
   const { model, temperature } = resolveModelAndTemp(providerName, options);

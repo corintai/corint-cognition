@@ -4,6 +4,6 @@ export class DeepSeekProvider extends OpenAIProvider {
   name = 'deepseek';
 
   constructor(apiKey: string) {
-    super(apiKey, 'https://api.deepseek.com');
+    super(apiKey, 'https://api.deepseek.com', true);
   }
 }

@@ -29,6 +29,7 @@ export class ListFilesTool extends Tool<ListFilesInputType, ListFilesResult> {
     const basePath = pathHasGlob ? resolvePath('.', context) : resolvePath(input.path, context);
     const pattern = input.pattern || (pathHasGlob ? input.path : '**/*');
     const absolute = input.absolute ?? false;
+    const maxResults = input.max_results ?? 200;
 
     const entries = await fg(pattern, {
       cwd: basePath,
@@ -38,13 +39,13 @@ export class ListFilesTool extends Tool<ListFilesInputType, ListFilesResult> {
       absolute,
     });
 
-    if (!input.max_results || entries.length <= input.max_results) {
+    if (entries.length <= maxResults) {
       return { basePath, files: entries };
     }
 
     return {
       basePath,
-      files: entries.slice(0, input.max_results),
+      files: entries.slice(0, maxResults),
       truncated: true,
     };
   }

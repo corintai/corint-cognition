@@ -11,12 +11,14 @@ import type {
 export class OpenAIProvider implements LLMProvider {
   name = 'openai';
   private client: OpenAI;
+  protected includeReasoningContent: boolean;
 
-  constructor(apiKey: string, baseURL?: string) {
+  constructor(apiKey: string, baseURL?: string, includeReasoningContent = false) {
     this.client = new OpenAI({
       apiKey,
       baseURL,
     });
+    this.includeReasoningContent = includeReasoningContent;
   }
 
   private convertMessages(messages: LLMMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
@@ -29,7 +31,7 @@ export class OpenAIProvider implements LLMProvider {
         };
       }
       if (msg.role === 'assistant' && msg.tool_calls) {
-        return {
+        const assistantMessage = {
           role: 'assistant',
           content: msg.content,
           tool_calls: msg.tool_calls.map(tc => ({
@@ -40,12 +42,24 @@ export class OpenAIProvider implements LLMProvider {
               arguments: tc.function.arguments,
             },
           })),
-        };
+        } as OpenAI.Chat.ChatCompletionMessageParam & { reasoning_content?: string };
+
+        if (this.includeReasoningContent) {
+          assistantMessage.reasoning_content = '';
+        }
+
+        return assistantMessage;
       }
-      return {
+      const baseMessage = {
         role: msg.role as 'system' | 'user' | 'assistant',
         content: msg.content,
-      };
+      } as OpenAI.Chat.ChatCompletionMessageParam & { reasoning_content?: string };
+
+      if (this.includeReasoningContent && msg.role === 'assistant') {
+        baseMessage.reasoning_content = '';
+      }
+
+      return baseMessage;
     });
   }
 
