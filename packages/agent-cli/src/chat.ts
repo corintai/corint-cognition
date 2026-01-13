@@ -2,6 +2,7 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { createAgent, getRuntimeInfo, type AgentRuntimeOptions, type ConfirmFn } from './agent.js';
 import { CliReporter } from './reporter.js';
+import { TerminalUI } from './terminal-ui.js';
 import { SessionStore, type SessionState, type SessionCheckpoint } from './session-store.js';
 import type { SessionContext } from '@corint/agent-core';
 
@@ -9,11 +10,26 @@ export interface ChatOptions extends AgentRuntimeOptions {
   session?: string;
   userId?: string;
   yes?: boolean;
+  ui?: string;
 }
 
 export async function runChat(options: ChatOptions): Promise<void> {
-  const reporter = new CliReporter({ useSpinner: process.stdout.isTTY });
-  const confirm = createConfirm(options, reporter);
+  const uiMode = resolveUiMode(options);
+  const canUseTui = Boolean(process.stdout.isTTY && process.stdin.isTTY);
+  const useTui = uiMode === 'tui' && canUseTui;
+  const ui = useTui
+    ? new TerminalUI({
+        prompt: chalk.cyan('> '),
+        echoPrefix: chalk.cyan('> '),
+        showDivider: true,
+      })
+    : null;
+  ui?.start();
+  const reporter = new CliReporter({ useSpinner: process.stdout.isTTY && !useTui, output: ui ?? undefined });
+  if (uiMode === 'tui' && !useTui) {
+    reporter.warn('TUI requires an interactive terminal; falling back to plain UI.');
+  }
+  const confirm = createConfirm(options, reporter, ui ?? undefined);
   const orchestrator = createAgent(
     { ...options, autoApprove: options.yes || !process.stdin.isTTY },
     reporter,
@@ -32,56 +48,55 @@ export async function runChat(options: ChatOptions): Promise<void> {
     model: runtimeInfo.model,
     temperature: runtimeInfo.temperature,
     sessionId: activeSessionId,
+    ui: uiMode,
   });
   reporter.info('Type /help for commands.');
 
-  while (true) {
-    const { input } = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'input',
-        message: chalk.cyan('>'),
-      },
-    ]);
+  try {
+    while (true) {
+      const input = await promptInput(ui);
 
-    const trimmed = String(input || '').trim();
-    if (!trimmed) {
-      continue;
-    }
-
-    if (trimmed.startsWith('/')) {
-      const shouldExit = await handleCommand(
-        trimmed,
-        reporter,
-        store,
-        orchestrator,
-        context,
-        state,
-        newState => {
-          state = newState;
-        },
-        newContext => {
-          context = newContext;
-        },
-        newSessionId => {
-          activeSessionId = newSessionId;
-        },
-        options,
-      );
-      if (shouldExit) {
-        break;
+      const trimmed = String(input || '').trim();
+      if (!trimmed) {
+        continue;
       }
-      continue;
+
+      if (trimmed.startsWith('/')) {
+        const shouldExit = await handleCommand(
+          trimmed,
+          reporter,
+          store,
+          orchestrator,
+          context,
+          state,
+          newState => {
+            state = newState;
+          },
+          newContext => {
+            context = newContext;
+          },
+          newSessionId => {
+            activeSessionId = newSessionId;
+          },
+          options,
+        );
+        if (shouldExit) {
+          break;
+        }
+        continue;
+      }
+
+      const checkpoint = store.createCheckpoint(context);
+      state.checkpoints.push(checkpoint);
+      await store.saveSession(state);
+
+      await runMessage(orchestrator, reporter, activeSessionId, trimmed);
+
+      state = store.updateStateFromContext(state, context);
+      await store.saveSession(state);
     }
-
-    const checkpoint = store.createCheckpoint(context);
-    state.checkpoints.push(checkpoint);
-    await store.saveSession(state);
-
-    await runMessage(orchestrator, reporter, activeSessionId, trimmed);
-
-    state = store.updateStateFromContext(state, context);
-    await store.saveSession(state);
+  } finally {
+    ui?.close();
   }
 }
 
@@ -104,6 +119,7 @@ export async function runOnce(prompt: string, options: ChatOptions): Promise<voi
     model: runtimeInfo.model,
     temperature: runtimeInfo.temperature,
     sessionId,
+    ui: 'plain',
   });
   let state = await loadSessionState(store, sessionId, context);
 
@@ -140,10 +156,13 @@ async function runMessage(
   }
 }
 
-function createConfirm(options: ChatOptions, reporter: CliReporter): ConfirmFn {
+function createConfirm(options: ChatOptions, reporter: CliReporter, ui?: TerminalUI): ConfirmFn {
   return async (message: string) => {
     if (options.yes || !process.stdin.isTTY) {
       return true;
+    }
+    if (ui) {
+      return ui.confirm(message);
     }
     reporter.pauseStatus();
     const answer = await inquirer.prompt([
@@ -157,6 +176,28 @@ function createConfirm(options: ChatOptions, reporter: CliReporter): ConfirmFn {
     reporter.resumeStatus();
     return Boolean(answer.approved);
   };
+}
+
+async function promptInput(ui: TerminalUI | null): Promise<string> {
+  if (ui) {
+    return ui.readLine();
+  }
+  const { input } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'input',
+      message: chalk.cyan('>'),
+    },
+  ]);
+  return String(input || '');
+}
+
+function resolveUiMode(options: ChatOptions): 'tui' | 'plain' {
+  const raw = (options.ui || process.env.CORINT_UI || 'auto').toLowerCase();
+  if (raw === 'tui' || raw === 'plain') {
+    return raw;
+  }
+  return process.stdout.isTTY && process.stdin.isTTY ? 'tui' : 'plain';
 }
 
 async function resolveSessionId(options: ChatOptions, store: SessionStore): Promise<string> {
@@ -277,7 +318,7 @@ function printHistory(context: SessionContext, reporter: CliReporter, count: num
   for (const item of items) {
     const stamp = new Date(item.timestamp).toLocaleTimeString();
     const label = item.role.padEnd(9);
-    console.log(`${chalk.gray(`[${stamp}]`)} ${chalk.cyan(label)} ${item.content}`);
+    reporter.line(`${chalk.gray(`[${stamp}]`)} ${chalk.cyan(label)} ${item.content}`);
   }
   reporter.resumeStatus();
 }
@@ -291,7 +332,7 @@ async function listSessions(store: SessionStore, reporter: CliReporter): Promise
   reporter.pauseStatus();
   for (const session of sessions) {
     const updated = new Date(session.updatedAt).toLocaleString();
-    console.log(`${chalk.cyan(session.sessionId)} ${chalk.gray(updated)}`);
+    reporter.line(`${chalk.cyan(session.sessionId)} ${chalk.gray(updated)}`);
   }
   reporter.resumeStatus();
 }

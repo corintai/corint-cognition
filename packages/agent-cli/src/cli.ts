@@ -23,6 +23,7 @@ program
   .option('--max-tokens <value>', 'Token budget limit', parseInt)
   .option('--max-queries <value>', 'Query limit per session', parseInt)
   .option('--timeout <value>', 'Session timeout in ms', parseInt)
+  .option('--ui <mode>', 'UI mode: auto | tui | plain')
   .option('--yes', 'Auto-approve destructive actions', false)
   .action(async options => {
     await runChat(options);

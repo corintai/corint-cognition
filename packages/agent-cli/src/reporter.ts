@@ -3,6 +3,12 @@ import ora, { Ora } from 'ora';
 
 export interface ReporterOptions {
   useSpinner?: boolean;
+  output?: ReporterOutput;
+}
+
+export interface ReporterOutput {
+  writeLine(line: string): void;
+  setStatus(message: string | null): void;
 }
 
 export interface BannerInfo {
@@ -11,38 +17,39 @@ export interface BannerInfo {
   model: string;
   temperature?: number;
   sessionId: string;
+  ui?: 'tui' | 'plain';
 }
 
 export class CliReporter {
   private spinner: Ora | null = null;
   private currentStatus: string | null = null;
   private useSpinner: boolean;
+  private output?: ReporterOutput;
 
   constructor(options: ReporterOptions = {}) {
-    this.useSpinner = options.useSpinner ?? process.stdout.isTTY;
+    this.output = options.output;
+    this.useSpinner = this.output ? false : options.useSpinner ?? process.stdout.isTTY;
   }
 
   banner(info: BannerInfo): void {
     this.pauseStatus();
-    console.log(chalk.bold('CORINT Agent'));
-    console.log(
+    this.writeLine(chalk.bold('CORINT Agent'));
+    this.writeLine(
       chalk.gray(
         `mode=${info.mode} provider=${info.provider} model=${info.model}${
           info.temperature !== undefined ? ` temp=${info.temperature}` : ''
-        }`,
+        }${info.ui ? ` ui=${info.ui}` : ''}`,
       ),
     );
-    console.log(chalk.gray(`session=${info.sessionId}`));
-    console.log('');
+    this.writeLine(chalk.gray(`session=${info.sessionId}`));
+    this.writeLine('');
     this.resumeStatus();
   }
 
   status(message: string): void {
     this.currentStatus = message;
-    if (!this.useSpinner) {
-      this.pauseStatus();
-      console.log(chalk.gray(`[status] ${message}`));
-      this.resumeStatus();
+    if (this.output) {
+      this.output.setStatus(chalk.gray(`status: ${message}`));
       return;
     }
     if (this.spinner) {
@@ -53,6 +60,9 @@ export class CliReporter {
   }
 
   pauseStatus(): void {
+    if (this.output) {
+      return;
+    }
     if (this.spinner) {
       this.spinner.stop();
       this.spinner = null;
@@ -60,7 +70,7 @@ export class CliReporter {
   }
 
   resumeStatus(): void {
-    if (!this.useSpinner) {
+    if (this.output || !this.useSpinner) {
       return;
     }
     if (!this.spinner && this.currentStatus) {
@@ -69,6 +79,9 @@ export class CliReporter {
   }
 
   clearStatus(): void {
+    if (this.output) {
+      this.output.setStatus(null);
+    }
     if (this.spinner) {
       this.spinner.stop();
       this.spinner = null;
@@ -98,21 +111,23 @@ export class CliReporter {
     if (!trimmed) {
       return;
     }
-    console.log(chalk.white(trimmed));
-    console.log('');
+    this.writeLine(chalk.white(trimmed));
+    this.writeLine('');
   }
 
   toolCall(name: string, args: unknown): void {
     this.pauseStatus();
-    console.log(chalk.cyan(`tool: ${name}`));
-    console.log(chalk.gray(formatArgs(args)));
+    this.writeLine(chalk.cyan(`tool: ${name}`));
+    this.writeLine(chalk.gray(formatArgs(args)));
     this.resumeStatus();
   }
 
   toolResult(name: string, ok: boolean, summary?: string): void {
     this.pauseStatus();
     const status = ok ? chalk.green('ok') : chalk.red('error');
-    console.log(`${chalk.cyan(`tool: ${name}`)} ${status}${summary ? ` ${summary}` : ''}`);
+    this.writeLine(
+      `${chalk.cyan(`tool: ${name}`)} ${status}${summary ? ` ${summary}` : ''}`,
+    );
     this.resumeStatus();
   }
 
@@ -122,8 +137,26 @@ export class CliReporter {
     message: string,
   ): void {
     this.pauseStatus();
-    console.log(`${color(`[${label}]`)} ${message}`);
+    this.writeLine(`${color(`[${label}]`)} ${message}`);
     this.resumeStatus();
+  }
+
+  line(message: string): void {
+    this.pauseStatus();
+    this.writeLine(message);
+    this.resumeStatus();
+  }
+
+  blank(): void {
+    this.line('');
+  }
+
+  private writeLine(message: string): void {
+    if (this.output) {
+      this.output.writeLine(message);
+      return;
+    }
+    console.log(message);
   }
 }
 
