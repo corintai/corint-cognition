@@ -17,7 +17,7 @@ export class Executor {
   private llmClient: LLMClient;
   private toolRegistry: ToolRegistry;
   private maxRetries = 3;
-  private maxToolIterations = 5;
+  private maxToolIterations = 8;
   private maxToolOutputChars = 8000;
 
   constructor(llmClient: LLMClient, toolRegistry: ToolRegistry) {
@@ -121,6 +121,24 @@ export class Executor {
 
       response = await this.llmClient.complete(messages, toolConfig);
       mergedUsage = this.mergeUsage(mergedUsage, response.usage);
+    }
+
+    if (response.tool_calls && response.tool_calls.length > 0) {
+      messages = [
+        ...messages,
+        {
+          role: 'assistant' as const,
+          content: response.content ?? '',
+          tool_calls: response.tool_calls,
+        },
+        {
+          role: 'system' as const,
+          content: 'Provide a final response now without calling tools.',
+        },
+      ];
+      const finalResponse = await this.llmClient.complete(messages, {});
+      mergedUsage = this.mergeUsage(mergedUsage, finalResponse.usage);
+      response = finalResponse;
     }
 
     return {

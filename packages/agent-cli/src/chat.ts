@@ -2,7 +2,7 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { createAgent, getRuntimeInfo, type AgentRuntimeOptions, type ConfirmFn } from './agent.js';
 import { CliReporter } from './reporter.js';
-import { TerminalUI } from './terminal-ui.js';
+import { InkUI } from './ink-ui.js';
 import { SessionStore, type SessionState, type SessionCheckpoint } from './session-store.js';
 import type { SessionContext } from '@corint/agent-core';
 
@@ -13,12 +13,19 @@ export interface ChatOptions extends AgentRuntimeOptions {
   ui?: string;
 }
 
+interface InteractiveUI {
+  start(): void;
+  close(): void;
+  readLine(options?: { prompt?: string; echo?: boolean; echoPrefix?: string }): Promise<string>;
+  confirm(message: string): Promise<boolean>;
+}
+
 export async function runChat(options: ChatOptions): Promise<void> {
   const uiMode = resolveUiMode(options);
   const canUseTui = Boolean(process.stdout.isTTY && process.stdin.isTTY);
   const useTui = uiMode === 'tui' && canUseTui;
-  const ui = useTui
-    ? new TerminalUI({
+  const ui: InteractiveUI | null = useTui
+    ? new InkUI({
         prompt: chalk.cyan('> '),
         echoPrefix: chalk.cyan('> '),
         showDivider: true,
@@ -156,7 +163,7 @@ async function runMessage(
   }
 }
 
-function createConfirm(options: ChatOptions, reporter: CliReporter, ui?: TerminalUI): ConfirmFn {
+function createConfirm(options: ChatOptions, reporter: CliReporter, ui?: InteractiveUI): ConfirmFn {
   return async (message: string) => {
     if (options.yes || !process.stdin.isTTY) {
       return true;
@@ -178,7 +185,7 @@ function createConfirm(options: ChatOptions, reporter: CliReporter, ui?: Termina
   };
 }
 
-async function promptInput(ui: TerminalUI | null): Promise<string> {
+async function promptInput(ui: InteractiveUI | null): Promise<string> {
   if (ui) {
     return ui.readLine();
   }

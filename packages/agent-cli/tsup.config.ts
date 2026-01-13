@@ -9,5 +9,6 @@ export default defineConfig({
   splitting: false,
   treeshake: true,
   outDir: 'dist',
+  tsconfig: 'tsconfig.json',
   shims: true,
 });

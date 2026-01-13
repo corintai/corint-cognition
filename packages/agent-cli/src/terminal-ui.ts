@@ -25,6 +25,12 @@ export class TerminalUI implements ReporterOutput {
   private maxOutputLines: number;
   private useAltScreen: boolean;
   private showDivider: boolean;
+  private scrollOffset = 0;
+  private renderQueued = false;
+  private needsFullRender = false;
+  private lastRenderCols = 0;
+  private lastRenderRows = 0;
+  private lastAvailable = 0;
   private pending: {
     resolve: (value: string) => void;
     options: ReadLineOptions;
@@ -47,12 +53,13 @@ export class TerminalUI implements ReporterOutput {
     if (this.useAltScreen) {
       process.stdout.write('\x1b[?1049h');
     }
+    process.stdout.write('\x1b[?25l');
     readline.emitKeypressEvents(process.stdin);
     process.stdin.setRawMode(true);
     process.stdin.resume();
     process.stdin.on('keypress', this.handleKeypress);
     process.stdout.on('resize', this.handleResize);
-    this.render();
+    this.renderFull();
   }
 
   close(): void {
@@ -65,6 +72,7 @@ export class TerminalUI implements ReporterOutput {
     if (process.stdin.isTTY) {
       process.stdin.setRawMode(false);
     }
+    process.stdout.write('\x1b[?25h');
     if (this.useAltScreen) {
       process.stdout.write('\x1b[?1049l');
     }
@@ -78,12 +86,12 @@ export class TerminalUI implements ReporterOutput {
     if (this.outputLines.length > this.maxOutputLines) {
       this.outputLines = this.outputLines.slice(-this.maxOutputLines);
     }
-    this.render();
+    this.scheduleRender(true);
   }
 
   setStatus(message: string | null): void {
     this.statusLine = message;
-    this.render();
+    this.scheduleRender(true);
   }
 
   readLine(options: ReadLineOptions = {}): Promise<string> {
@@ -97,7 +105,7 @@ export class TerminalUI implements ReporterOutput {
     this.inputEnabled = true;
     const prompt = options.prompt ?? this.prompt;
     this.pending = { resolve: () => {}, options: { ...options, prompt } };
-    this.render();
+    this.scheduleRender(true);
     return new Promise<string>(resolve => {
       if (this.pending) {
         this.pending.resolve = resolve;
@@ -124,6 +132,16 @@ export class TerminalUI implements ReporterOutput {
       return;
     }
 
+    if (key?.name === 'pageup') {
+      this.scrollBy(this.lastAvailable || (process.stdout.rows || 24));
+      return;
+    }
+
+    if (key?.name === 'pagedown') {
+      this.scrollBy(-(this.lastAvailable || (process.stdout.rows || 24)));
+      return;
+    }
+
     if (key?.name === 'return' || key?.name === 'enter') {
       const input = this.inputBuffer;
       const pending = this.pending;
@@ -139,7 +157,7 @@ export class TerminalUI implements ReporterOutput {
       if (echo) {
         this.writeLine(`${echoPrefix}${input}`);
       } else {
-        this.render();
+        this.scheduleRender(true);
       }
       pending.resolve(input);
       return;
@@ -148,28 +166,53 @@ export class TerminalUI implements ReporterOutput {
     if (key?.name === 'backspace') {
       if (this.inputBuffer.length > 0) {
         this.inputBuffer = this.inputBuffer.slice(0, -1);
-        this.render();
+        this.scheduleRender(false);
       }
       return;
     }
 
     if (key?.name === 'escape') {
       this.inputBuffer = '';
-      this.render();
+      this.scheduleRender(false);
       return;
     }
 
     if (key?.sequence && !key?.ctrl && !key?.meta) {
       this.inputBuffer += key.sequence;
-      this.render();
+      this.scheduleRender(false);
     }
   };
 
   private handleResize = (): void => {
-    this.render();
+    this.scheduleRender(true);
   };
 
-  private render(): void {
+  private scheduleRender(full: boolean): void {
+    if (!this.started) {
+      return;
+    }
+    if (full) {
+      this.needsFullRender = true;
+    }
+    if (this.renderQueued) {
+      return;
+    }
+    this.renderQueued = true;
+    setImmediate(() => {
+      this.renderQueued = false;
+      if (!this.started) {
+        return;
+      }
+      if (this.needsFullRender) {
+        this.needsFullRender = false;
+        this.renderFull();
+      } else {
+        this.renderInputLine();
+      }
+    });
+  }
+
+  private renderFull(): void {
     if (!this.started) {
       return;
     }
@@ -182,7 +225,15 @@ export class TerminalUI implements ReporterOutput {
     const dividerHeight = this.showDivider ? 1 : 0;
     const inputHeight = 1;
     const available = Math.max(0, rows - statusHeight - dividerHeight - inputHeight);
-    const visibleOutput = wrappedOutput.slice(-available);
+    const maxScroll = Math.max(0, wrappedOutput.length - available);
+    if (this.scrollOffset > maxScroll) {
+      this.scrollOffset = maxScroll;
+    }
+    const start = Math.max(0, wrappedOutput.length - available - this.scrollOffset);
+    const visibleOutput = wrappedOutput.slice(start, start + available);
+    this.lastRenderCols = cols;
+    this.lastRenderRows = rows;
+    this.lastAvailable = available;
 
     process.stdout.write('\x1b[2J\x1b[H');
     for (const line of visibleOutput) {
@@ -197,6 +248,19 @@ export class TerminalUI implements ReporterOutput {
       process.stdout.write(this.dim('-'.repeat(cols)) + '\x1b[0m\n');
     }
 
+    this.renderInputLine();
+  }
+
+  private renderInputLine(): void {
+    if (!this.started) {
+      return;
+    }
+    const cols = process.stdout.columns || 80;
+    const rows = process.stdout.rows || 24;
+    if (cols !== this.lastRenderCols || rows !== this.lastRenderRows) {
+      this.renderFull();
+      return;
+    }
     const prompt = this.pending?.options.prompt ?? this.prompt;
     const promptWidth = this.visibleLength(prompt);
     const maxInput = Math.max(0, cols - promptWidth);
@@ -205,7 +269,18 @@ export class TerminalUI implements ReporterOutput {
         ? this.inputBuffer.slice(this.inputBuffer.length - maxInput)
         : this.inputBuffer;
     const inputLine = this.inputEnabled ? `${prompt}${displayInput}` : this.dim(`${prompt}${displayInput}`);
+    process.stdout.write(`\x1b[${rows};1H`);
+    process.stdout.write('\x1b[2K');
     process.stdout.write(this.truncateAnsi(inputLine, cols) + '\x1b[0m');
+  }
+
+  private scrollBy(lines: number): void {
+    const next = Math.max(0, this.scrollOffset + lines);
+    if (next === this.scrollOffset) {
+      return;
+    }
+    this.scrollOffset = next;
+    this.scheduleRender(true);
   }
 
   private wrapLines(lines: string[], width: number): string[] {
